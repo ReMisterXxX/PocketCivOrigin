@@ -185,6 +185,8 @@ public class MapGenerator : MonoBehaviour
     // центр Surface: на topHeight минус половина толщины плитки
     float surfaceCenterY = topHeight - surfaceThickness * 0.5f;
     surface.localPosition = new Vector3(0f, surfaceCenterY, 0f);
+
+    tile.SetTopHeight(topHeight);
 }
 
 
