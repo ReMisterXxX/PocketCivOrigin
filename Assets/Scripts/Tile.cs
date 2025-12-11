@@ -15,6 +15,9 @@ public class Tile : MonoBehaviour
     public Vector2Int GridPosition { get; private set; }
     public TileTerrainType TerrainType { get; private set; }
 
+    // Владелец тайла (может быть None)
+    public PlayerId Owner { get; private set; } = PlayerId.None;
+
     // список всех декораций на тайле
     public List<GameObject> Decorations { get; } = new List<GameObject>();
 
@@ -25,6 +28,11 @@ public class Tile : MonoBehaviour
     public void SetTopHeight(float value)
     {
         TopHeight = value;
+    }
+
+    public void SetOwner(PlayerId owner)
+    {
+        Owner = owner;
     }
 
     [Header("Territory")]
@@ -162,8 +170,8 @@ public class Tile : MonoBehaviour
         {
             startColor = surfaceRenderer.material.color;
             targetColor = select
-                ? originalSurfaceColor * 1.15f   // мягкая подсветка, чтобы территория не терялась
-                : originalSurfaceColor;         // возвращаем исходный
+                ? originalSurfaceColor * 1.15f   // мягкая подсветка
+                : originalSurfaceColor;
         }
 
         float t = 0f;
@@ -171,7 +179,7 @@ public class Tile : MonoBehaviour
         while (t < 1f)
         {
             t += Time.deltaTime / selectionDuration;
-            float tt = Mathf.SmoothStep(0f, 1f, t); // плавное ускорение/замедление
+            float tt = Mathf.SmoothStep(0f, 1f, t);
 
             // позиция
             transform.position = Vector3.Lerp(startPos, targetPos, tt);
@@ -215,7 +223,7 @@ public class Tile : MonoBehaviour
 
         territoryRenderer.gameObject.SetActive(true);
 
-        // усиливаем насыщенность и слегка яркость
+        // усиливаем насыщенность и чуть яркость
         Color.RGBToHSV(color, out float h, out float s, out float v);
         s = Mathf.Clamp01(s * 1.3f);
         v = Mathf.Clamp01(v * 1.1f);

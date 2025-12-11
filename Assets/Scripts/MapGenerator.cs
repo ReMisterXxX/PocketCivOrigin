@@ -72,23 +72,17 @@ public class MapGenerator : MonoBehaviour
     [Range(0f, 1f)]
     public float cityTerritoryAlpha = 0.55f;
 
-    // фиксированный пул цветов для территорий
-    private static readonly Color[] territoryColors = new Color[]
-    {
-        new Color(0.95f, 0.10f, 0.10f), // Red
-        new Color(1.00f, 0.50f, 0.00f), // Orange
-        new Color(0.10f, 0.60f, 1.00f), // Blue
-        new Color(0.60f, 0.20f, 1.00f), // Purple
-        new Color(0.10f, 0.85f, 0.10f), // Green
-        new Color(0.90f, 0.20f, 0.50f), // Pink
-        new Color(0.20f, 0.90f, 0.80f), // Aqua
-        new Color(0.95f, 0.85f, 0.10f), // Yellow
-    };
+    [Header("Игроки")]
+    public PlayerId startingPlayer = PlayerId.Player1; // владелец стартового города
 
     private Tile[,] tiles;
 
     private void Start()
     {
+        // При каждом запуске новой карты очищаем цвета игроков,
+        // чтобы они распределялись заново с начала пула.
+        PlayerColorManager.Reset();
+
         GenerateMap();
     }
 
@@ -394,13 +388,6 @@ public class MapGenerator : MonoBehaviour
         tile.RegisterDecoration(instance);
     }
 
-    // ====== СЛУЧАЙНЫЙ ЦВЕТ ИЗ ПУЛА ======
-    private Color GetRandomTerritoryColor()
-    {
-        int index = Random.Range(0, territoryColors.Length);
-        return territoryColors[index];
-    }
-
     // ====== СОЗДАНИЕ СТАРТОВОГО ГОРОДА И ФОКУС КАМЕРЫ ======
     private void SpawnStartingCityAndFocusCamera()
     {
@@ -435,13 +422,14 @@ public class MapGenerator : MonoBehaviour
         pos.y = cityTile.TopHeight + 0.01f;
 
         // делаем город дочерним объектом тайла, чтобы он поднимался вместе с ним
-        GameObject cityGO = Instantiate(cityPrefab, pos, Quaternion.identity, cityTile.transform);
+        GameObject cityGO = Object.Instantiate(cityPrefab, pos, Quaternion.identity, cityTile.transform);
 
-        // помечаем, что на тайле есть здание
+        // помечаем, что на тайле есть здание и владелец
         cityTile.SetBuildingPresent(true);
+        cityTile.SetOwner(startingPlayer);
 
-        // цвет территории из фиксированного набора
-        Color territoryColor = GetRandomTerritoryColor();
+        // цвет территории — цвет игрока
+        Color territoryColor = PlayerColorManager.GetColor(startingPlayer);
         territoryColor.a = cityTerritoryAlpha;
 
         // красим тайлы в радиусе
@@ -462,11 +450,13 @@ public class MapGenerator : MonoBehaviour
                 if (t == null) continue;
 
                 t.SetTerritoryColor(territoryColor);
+                // если захочешь считать, какие тайлы принадлежат игроку — можно тоже ставить owner
+                // t.SetOwner(startingPlayer);
             }
         }
 
         // фокусируем камеру на город
-        CameraController cam = FindObjectOfType<CameraController>();
+        CameraController cam = Object.FindObjectOfType<CameraController>();
         if (cam != null)
         {
             cam.JumpToPosition(cityTile.transform.position);
