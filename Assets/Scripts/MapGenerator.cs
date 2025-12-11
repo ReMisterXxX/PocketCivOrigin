@@ -17,18 +17,20 @@ public class MapGenerator : MonoBehaviour
     public Material mountainMaterial;
 
     [Header("Префабы декораций")]
-    public GameObject[] grassTreePrefabs;   // маленькие деревья на полях
-    public GameObject[] grassPlantPrefabs;    // трава
-    public GameObject[] grassFlowerPrefabs;   // цветы
-    public GameObject[] forestTreePrefabs;    // деревья
-    public GameObject[] mountainDecorPrefabs; // скалы/горы сверху
-    public GameObject[] waterDecorPrefabs;    // по желанию
+    public GameObject[] grassTreePrefabs;      // маленькие деревья на полях
+    public GameObject[] grassPlantPrefabs;     // трава на полях
+    public GameObject[] grassFlowerPrefabs;    // цветы на полях
+    public GameObject[] forestTreePrefabs;     // деревья в лесу
+    public GameObject[] forestGrassPrefabs;    // ТРАВА В ЛЕСУ (НОВОЕ)
+    public GameObject[] mountainDecorPrefabs;  // скалы/горы сверху
+    public GameObject[] waterDecorPrefabs;     // по желанию
 
     [Header("Количество декораций на тайл")]
-    public Vector2Int grassTreesCount = new Vector2Int(0, 2);  // новые маленькие деревья на полях
-    public Vector2Int forestTreesCount = new Vector2Int(3, 5);     // 3–5 деревьев
-    public Vector2Int grassPlantsCount = new Vector2Int(5, 7);     // 5–7 травы
-    public Vector2Int grassFlowersCount = new Vector2Int(3, 4);    // 3–4 цветка
+    public Vector2Int grassTreesCount     = new Vector2Int(0, 2);  // 0–2 деревьев на полях
+    public Vector2Int forestTreesCount    = new Vector2Int(3, 5);  // 3–5 деревьев в лесу
+    public Vector2Int grassPlantsCount    = new Vector2Int(5, 7);  // 5–7 пучков травы на поле
+    public Vector2Int grassFlowersCount   = new Vector2Int(3, 4);  // 3–4 цветка на поле
+    public Vector2Int forestGrassPerTile  = new Vector2Int(4, 7);  // 4–7 пучков травы в лесу (НОВОЕ)
 
     [Header("Разброс декора по тайлу (по XZ)")]
     public float decorationSpread = 0.7f; // 0.7 тайла по ширине
@@ -45,17 +47,19 @@ public class MapGenerator : MonoBehaviour
     public float forestThreshold = 0.55f;
 
     [Header("ВЫСОТА ТАЙЛОВ (ВЕРХА) ПО ТИПУ")]
-    // Это высота ВЕРХА тайла (Surface) относительно низа земли (0)
-    public float grassHeight = 0.25f;
-    public float forestHeight = 0.3f;
+    // Это высота ВЕРХА тайла (Surface) относительно низа земли (groundBottomY)
+    public float grassHeight    = 0.25f;
+    public float forestHeight   = 0.3f;
     public float mountainHeight = 0.8f;
-    public float waterHeight = 0.15f;
+    public float waterHeight    = 0.15f;
 
     [Header("Смещение декораций по высоте над тайлом")]
-    public float grassDecorationOffset = 0.03f;
-    public float forestDecorationOffset = 0.04f;
-    public float mountainDecorationOffset = 0.06f;
-    public float waterDecorationOffset = 0.02f;
+    public float grassDecorationOffset       = 0.006f; // трава/цветы на поле
+    public float fieldTreeDecorationOffset   = 0.02f;  // деревья на полях
+    public float forestTreeDecorationOffset  = 0.3f;   // деревья леса
+    public float forestGrassDecorationOffset = 0.02f;  // трава в лесу (НОВОЕ)
+    public float mountainDecorationOffset    = 0.15f;
+    public float waterDecorationOffset       = 0.02f;
 
     [Header("Нижний уровень земли (дно всех столбиков)")]
     public float groundBottomY = -1f;
@@ -79,7 +83,8 @@ public class MapGenerator : MonoBehaviour
             {
                 TileTerrainType terrain = GetTerrainFromNoise(x, y);
 
-                // ВСЕ ТАЙЛЫ СТОЯТ НА ОДНОМ УРОВНЕ ПО Y
+                // все тайлы стоят на одном уровне по Y (0),
+                // разница высот задаётся через Ground/Surface
                 Vector3 worldPos = new Vector3(
                     x * tileSize,
                     0f,
@@ -151,44 +156,42 @@ public class MapGenerator : MonoBehaviour
 
     // ====== ПРИМЕНЕНИЕ ВЫСОТЫ К Ground + Surface ======
     private void ApplyHeightToTile(Tile tile, TileTerrainType terrain)
-{
-    Transform ground = tile.transform.Find("Ground");
-    Transform surface = tile.transform.Find("Surface");
-
-    if (ground == null || surface == null)
     {
-        Debug.LogWarning("Tile is missing Ground or Surface child!", tile);
-        return;
+        Transform ground = tile.transform.Find("Ground");
+        Transform surface = tile.transform.Find("Surface");
+
+        if (ground == null || surface == null)
+        {
+            Debug.LogWarning("Tile is missing Ground or Surface child!", tile);
+            return;
+        }
+
+        // высота ВЕРХА тайла (где должна быть верхняя грань Surface) в мировых координатах
+        float topHeight = Mathf.Max(0.05f, GetTopHeightForTerrain(terrain));
+
+        // текущие масштабы
+        Vector3 gScale = ground.localScale;
+        Vector3 sScale = surface.localScale;
+
+        float surfaceThickness = sScale.y; // толщина верхней плитки
+
+        // высота коричневого столбика от дна до низа поверхности
+        float groundHeight = Mathf.Max(0.1f, topHeight - surfaceThickness - groundBottomY);
+
+        // масштаб Ground по Y
+        gScale.y = groundHeight;
+        ground.localScale = gScale;
+
+        // центр Ground: от дна поднимаемся на половину высоты
+        float groundCenterY = groundBottomY + groundHeight * 0.5f;
+        ground.localPosition = new Vector3(0f, groundCenterY, 0f);
+
+        // центр Surface: на topHeight минус половина толщины плитки
+        float surfaceCenterY = topHeight - surfaceThickness * 0.5f;
+        surface.localPosition = new Vector3(0f, surfaceCenterY, 0f);
+
+        tile.SetTopHeight(topHeight);
     }
-
-    // высота ВЕРХА тайла (где должна быть верхняя грань Surface) в мировых координатах
-    float topHeight = Mathf.Max(0.05f, GetTopHeightForTerrain(terrain));
-
-    // текущие масштабы
-    Vector3 gScale = ground.localScale;
-    Vector3 sScale = surface.localScale;
-
-    float surfaceThickness = sScale.y; // толщина верхней плитки
-
-    // высота коричневого столбика от дна до низа поверхности
-    // (насколько Ground "высокий")
-    float groundHeight = Mathf.Max(0.1f, topHeight - surfaceThickness - groundBottomY);
-
-    // масштаб Ground по Y
-    gScale.y = groundHeight;
-    ground.localScale = gScale;
-
-    // центр Ground: от дна поднимаемся на половину высоты
-    float groundCenterY = groundBottomY + groundHeight * 0.5f;
-    ground.localPosition = new Vector3(0f, groundCenterY, 0f);
-
-    // центр Surface: на topHeight минус половина толщины плитки
-    float surfaceCenterY = topHeight - surfaceThickness * 0.5f;
-    surface.localPosition = new Vector3(0f, surfaceCenterY, 0f);
-
-    tile.SetTopHeight(topHeight);
-}
-
 
     // ====== МАТЕРИАЛ ДЛЯ SURFACE ======
     private void ApplyTerrainVisual(Tile tile, TileTerrainType terrain)
@@ -224,81 +227,90 @@ public class MapGenerator : MonoBehaviour
         }
     }
 
-    // ====== СПАВН ДЕКОРАЦИЙ (С УЧЁТОМ ТИПА И OFFSET) ======
-        // ====== СПАВН НЕСКОЛЬКИХ ДЕКОРАЦИЙ НА ТАЙЛ ======
+    // ====== СПАВН ДЕКОРАЦИЙ ПО ТИПУ ТАЙЛА ======
     private void SpawnDecorations(Tile tile, TileTerrainType terrain)
-{
-    switch (terrain)
     {
-        case TileTerrainType.Grass:
-            // трава (5–7)
-            if (grassPlantPrefabs != null && grassPlantPrefabs.Length > 0)
-            {
-                int count = Random.Range(grassPlantsCount.x, grassPlantsCount.y + 1);
-                for (int i = 0; i < count; i++)
+        switch (terrain)
+        {
+            case TileTerrainType.Grass:
+                // трава (5–7)
+                if (grassPlantPrefabs != null && grassPlantPrefabs.Length > 0)
                 {
-                    SpawnSingleDecoration(tile, grassPlantPrefabs, grassDecorationOffset, true);
+                    int count = Random.Range(grassPlantsCount.x, grassPlantsCount.y + 1);
+                    for (int i = 0; i < count; i++)
+                    {
+                        SpawnSingleDecoration(tile, grassPlantPrefabs, grassDecorationOffset, true);
+                    }
                 }
-            }
 
-            // цветы (3–4)
-            if (grassFlowerPrefabs != null && grassFlowerPrefabs.Length > 0)
-            {
-                int count = Random.Range(grassFlowersCount.x, grassFlowersCount.y + 1);
-                for (int i = 0; i < count; i++)
+                // цветы (3–4)
+                if (grassFlowerPrefabs != null && grassFlowerPrefabs.Length > 0)
                 {
-                    SpawnSingleDecoration(tile, grassFlowerPrefabs, grassDecorationOffset, true);
+                    int count = Random.Range(grassFlowersCount.x, grassFlowersCount.y + 1);
+                    for (int i = 0; i < count; i++)
+                    {
+                        SpawnSingleDecoration(tile, grassFlowerPrefabs, grassDecorationOffset, true);
+                    }
                 }
-            }
 
-            // маленькие деревья на полях (0–2)
-            if (grassTreePrefabs != null && grassTreePrefabs.Length > 0)
-            {
-                int count = Random.Range(grassTreesCount.x, grassTreesCount.y + 1);
-                for (int i = 0; i < count; i++)
+                // маленькие деревья на полях (0–2) — используем СВОЙ offset
+                if (grassTreePrefabs != null && grassTreePrefabs.Length > 0)
                 {
-                    SpawnSingleDecoration(tile, grassTreePrefabs, forestDecorationOffset, true);
+                    int count = Random.Range(grassTreesCount.x, grassTreesCount.y + 1);
+                    for (int i = 0; i < count; i++)
+                    {
+                        SpawnSingleDecoration(tile, grassTreePrefabs, fieldTreeDecorationOffset, true);
+                    }
                 }
-            }
-            break;
+                break;
 
-        case TileTerrainType.Forest:
-            // лесные деревья (3–5)
-            if (forestTreePrefabs != null && forestTreePrefabs.Length > 0)
-            {
-                int count = Random.Range(forestTreesCount.x, forestTreesCount.y + 1);
-                for (int i = 0; i < count; i++)
+            case TileTerrainType.Forest:
+                // деревья в лесу (3–5)
+                if (forestTreePrefabs != null && forestTreePrefabs.Length > 0)
                 {
-                    SpawnSingleDecoration(tile, forestTreePrefabs, forestDecorationOffset, true);
+                    int count = Random.Range(forestTreesCount.x, forestTreesCount.y + 1);
+                    for (int i = 0; i < count; i++)
+                    {
+                        SpawnSingleDecoration(tile, forestTreePrefabs, forestTreeDecorationOffset, true);
+                    }
                 }
-            }
-            break;
 
-        case TileTerrainType.Mountain:
-            if (mountainDecorPrefabs != null && mountainDecorPrefabs.Length > 0)
-            {
-                int count = Random.Range(1, 2); // одна "шапка"
-                for (int i = 0; i < count; i++)
+                // ТРАВА В ЛЕСУ (4–7 пучков)
+                if (forestGrassPrefabs != null && forestGrassPrefabs.Length > 0)
                 {
-                    SpawnSingleDecoration(tile, mountainDecorPrefabs, mountainDecorationOffset, false);
+                    int count = Random.Range(forestGrassPerTile.x, forestGrassPerTile.y + 1);
+                    for (int i = 0; i < count; i++)
+                    {
+                        SpawnSingleDecoration(tile, forestGrassPrefabs, forestGrassDecorationOffset, true);
+                    }
                 }
-            }
-            break;
+                break;
 
-        case TileTerrainType.Water:
-            if (waterDecorPrefabs != null && waterDecorPrefabs.Length > 0)
-            {
-                int count = Random.Range(0, 2); // редко
-                for (int i = 0; i < count; i++)
+            case TileTerrainType.Mountain:
+                if (mountainDecorPrefabs != null && mountainDecorPrefabs.Length > 0)
                 {
-                    SpawnSingleDecoration(tile, waterDecorPrefabs, waterDecorationOffset, true);
+                    int count = Random.Range(1, 2); // пока одна "шапка"
+                    for (int i = 0; i < count; i++)
+                    {
+                        SpawnSingleDecoration(tile, mountainDecorPrefabs, mountainDecorationOffset, false);
+                    }
                 }
-            }
-            break;
+                break;
+
+            case TileTerrainType.Water:
+                if (waterDecorPrefabs != null && waterDecorPrefabs.Length > 0)
+                {
+                    int count = Random.Range(0, 2); // редкий декор на воде
+                    for (int i = 0; i < count; i++)
+                    {
+                        SpawnSingleDecoration(tile, waterDecorPrefabs, waterDecorationOffset, true);
+                    }
+                }
+                break;
+        }
     }
-}
-    // ====== СПАВН ОДНОЙ ДЕКОРАЦИИ НА ТАЙЛ ======
 
+    // ====== СПАВН ОДНОЙ ДЕКОРАЦИИ НА ТАЙЛ ======
     private void SpawnSingleDecoration(Tile tile, GameObject[] prefabArray, float offset, bool randomizePosition)
     {
         if (prefabArray == null || prefabArray.Length == 0)
@@ -343,10 +355,9 @@ public class MapGenerator : MonoBehaviour
 
         GameObject instance = Instantiate(prefab, spawnPos, Quaternion.identity, tile.transform);
 
-        // случайный поворот
+        // случайный поворот по Y
         instance.transform.Rotate(0f, Random.Range(0f, 360f), 0f);
 
         tile.RegisterDecoration(instance);
     }
-
 }

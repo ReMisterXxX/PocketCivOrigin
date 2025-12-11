@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.EventSystems;
 
 public class TileSelector : MonoBehaviour
 {
@@ -16,6 +17,10 @@ public class TileSelector : MonoBehaviour
 
     void TrySelectTile()
     {
+        // если клик по UI — игнорируем
+        if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
+            return;
+
         Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
         if (Physics.Raycast(ray, out RaycastHit hit, 1000f))
         {
@@ -24,36 +29,40 @@ public class TileSelector : MonoBehaviour
             if (tile != null)
             {
                 Select(tile);
-                return; // <-- ключевое, панель не скрывается если попали по тайлу
+                return;
             }
         }
 
-        // сюда попадаем только если НЕ попали по тайлу
-
+        // клик в пустоту — снимаем выделение
         DeselectCurrent();
     }
 
     void Select(Tile tile)
-{
-    // Если кликаем на уже выбранный тайл — НИЧЕГО не делаем
-    if (selectedTile == tile)
-        return;
-
-    // Снимаем выделение со старого тайла
-    if (selectedTile != null)
     {
-        selectedTile.DeselectTile();
+        // если кликаем по уже выбранному тайлу —
+        // не трогаем выделение, просто заново показываем панель
+        if (selectedTile == tile)
+        {
+            if (tileInfoUI != null)
+                tileInfoUI.ShowForTile(tile);
+
+            return;
+        }
+
+        // снимаем выделение со старого тайла
+        if (selectedTile != null)
+        {
+            selectedTile.DeselectTile();
+        }
+
+        // выделяем новый тайл
+        selectedTile = tile;
+        selectedTile.SelectTile();
+
+        // показываем панель
+        if (tileInfoUI != null)
+            tileInfoUI.ShowForTile(selectedTile);
     }
-
-    // Выбираем новый тайл
-    selectedTile = tile;
-    selectedTile.SelectTile();
-
-    // Показываем панель
-    if (tileInfoUI != null)
-        tileInfoUI.ShowForTile(selectedTile);
-}
-
 
     void DeselectCurrent()
     {
