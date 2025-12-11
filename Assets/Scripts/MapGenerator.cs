@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 public class MapGenerator : MonoBehaviour
@@ -21,7 +22,7 @@ public class MapGenerator : MonoBehaviour
     public GameObject[] grassPlantPrefabs;     // трава на полях
     public GameObject[] grassFlowerPrefabs;    // цветы на полях
     public GameObject[] forestTreePrefabs;     // деревья в лесу
-    public GameObject[] forestGrassPrefabs;    // ТРАВА В ЛЕСУ (НОВОЕ)
+    public GameObject[] forestGrassPrefabs;    // трава в лесу
     public GameObject[] mountainDecorPrefabs;  // скалы/горы сверху
     public GameObject[] waterDecorPrefabs;     // по желанию
 
@@ -30,7 +31,7 @@ public class MapGenerator : MonoBehaviour
     public Vector2Int forestTreesCount    = new Vector2Int(3, 5);  // 3–5 деревьев в лесу
     public Vector2Int grassPlantsCount    = new Vector2Int(5, 7);  // 5–7 пучков травы на поле
     public Vector2Int grassFlowersCount   = new Vector2Int(3, 4);  // 3–4 цветка на поле
-    public Vector2Int forestGrassPerTile  = new Vector2Int(4, 7);  // 4–7 пучков травы в лесу (НОВОЕ)
+    public Vector2Int forestGrassPerTile  = new Vector2Int(4, 7);  // 4–7 пучков травы в лесу
 
     [Header("Разброс декора по тайлу (по XZ)")]
     public float decorationSpread = 0.7f; // 0.7 тайла по ширине
@@ -57,12 +58,32 @@ public class MapGenerator : MonoBehaviour
     public float grassDecorationOffset       = 0.006f; // трава/цветы на поле
     public float fieldTreeDecorationOffset   = 0.02f;  // деревья на полях
     public float forestTreeDecorationOffset  = 0.3f;   // деревья леса
-    public float forestGrassDecorationOffset = 0.02f;  // трава в лесу (НОВОЕ)
+    public float forestGrassDecorationOffset = 0.02f;  // трава в лесу
     public float mountainDecorationOffset    = 0.15f;
     public float waterDecorationOffset       = 0.02f;
 
     [Header("Нижний уровень земли (дно всех столбиков)")]
     public float groundBottomY = -1f;
+
+    [Header("Города")]
+    public GameObject cityPrefab;
+    [Range(1, 5)]
+    public int cityTerritoryRadius = 2;
+    [Range(0f, 1f)]
+    public float cityTerritoryAlpha = 0.55f;
+
+    // фиксированный пул цветов для территорий
+    private static readonly Color[] territoryColors = new Color[]
+    {
+        new Color(0.95f, 0.10f, 0.10f), // Red
+        new Color(1.00f, 0.50f, 0.00f), // Orange
+        new Color(0.10f, 0.60f, 1.00f), // Blue
+        new Color(0.60f, 0.20f, 1.00f), // Purple
+        new Color(0.10f, 0.85f, 0.10f), // Green
+        new Color(0.90f, 0.20f, 0.50f), // Pink
+        new Color(0.20f, 0.90f, 0.80f), // Aqua
+        new Color(0.95f, 0.85f, 0.10f), // Yellow
+    };
 
     private Tile[,] tiles;
 
@@ -101,6 +122,9 @@ public class MapGenerator : MonoBehaviour
                 tiles[x, y] = tile;
             }
         }
+
+        // создаём стартовый город и фокусируем камеру
+        SpawnStartingCityAndFocusCamera();
     }
 
     private void ClearOldMap()
@@ -154,7 +178,7 @@ public class MapGenerator : MonoBehaviour
         }
     }
 
-    // ====== ПРИМЕНЕНИЕ ВЫСОТЫ К Ground + Surface ======
+    // ====== ПРИМЕНЕНИЕ ВЫСОТЫ К Ground + Surface (+ TerritoryOverlay) ======
     private void ApplyHeightToTile(Tile tile, TileTerrainType terrain)
     {
         Transform ground = tile.transform.Find("Ground");
@@ -186,9 +210,18 @@ public class MapGenerator : MonoBehaviour
         float groundCenterY = groundBottomY + groundHeight * 0.5f;
         ground.localPosition = new Vector3(0f, groundCenterY, 0f);
 
-        // центр Surface: на topHeight минус половина толщины плитки
+        // центр Surface: на topHeight минус половину толщины плитки
         float surfaceCenterY = topHeight - surfaceThickness * 0.5f;
         surface.localPosition = new Vector3(0f, surfaceCenterY, 0f);
+
+        // двигаем TerritoryOverlay на ту же высоту, чуть выше поверхности
+        if (tile.territoryRenderer != null)
+        {
+            Transform terr = tile.territoryRenderer.transform;
+            Vector3 lp = terr.localPosition;
+            lp.y = surfaceCenterY + 0.01f;
+            terr.localPosition = lp;
+        }
 
         tile.SetTopHeight(topHeight);
     }
@@ -253,7 +286,7 @@ public class MapGenerator : MonoBehaviour
                     }
                 }
 
-                // маленькие деревья на полях (0–2) — используем СВОЙ offset
+                // маленькие деревья на полях (0–2)
                 if (grassTreePrefabs != null && grassTreePrefabs.Length > 0)
                 {
                     int count = Random.Range(grassTreesCount.x, grassTreesCount.y + 1);
@@ -275,7 +308,7 @@ public class MapGenerator : MonoBehaviour
                     }
                 }
 
-                // ТРАВА В ЛЕСУ (4–7 пучков)
+                // трава в лесу
                 if (forestGrassPrefabs != null && forestGrassPrefabs.Length > 0)
                 {
                     int count = Random.Range(forestGrassPerTile.x, forestGrassPerTile.y + 1);
@@ -359,5 +392,84 @@ public class MapGenerator : MonoBehaviour
         instance.transform.Rotate(0f, Random.Range(0f, 360f), 0f);
 
         tile.RegisterDecoration(instance);
+    }
+
+    // ====== СЛУЧАЙНЫЙ ЦВЕТ ИЗ ПУЛА ======
+    private Color GetRandomTerritoryColor()
+    {
+        int index = Random.Range(0, territoryColors.Length);
+        return territoryColors[index];
+    }
+
+    // ====== СОЗДАНИЕ СТАРТОВОГО ГОРОДА И ФОКУС КАМЕРЫ ======
+    private void SpawnStartingCityAndFocusCamera()
+    {
+        if (cityPrefab == null)
+        {
+            Debug.LogWarning("City prefab is not assigned in MapGenerator!");
+            return;
+        }
+
+        // собираем подходящие тайлы: не вода и не горы
+        List<Tile> candidates = new List<Tile>();
+        foreach (Tile t in tiles)
+        {
+            if (t == null) continue;
+            if (t.TerrainType == TileTerrainType.Water) continue;
+            if (t.TerrainType == TileTerrainType.Mountain) continue;
+
+            candidates.Add(t);
+        }
+
+        if (candidates.Count == 0)
+        {
+            Debug.LogWarning("No suitable tiles for a city!");
+            return;
+        }
+
+        // выбираем случайный тайл
+        Tile cityTile = candidates[Random.Range(0, candidates.Count)];
+
+        // позиция города — чуть над верхом тайла
+        Vector3 pos = cityTile.transform.position;
+        pos.y = cityTile.TopHeight + 0.01f;
+
+        // делаем город дочерним объектом тайла, чтобы он поднимался вместе с ним
+        GameObject cityGO = Instantiate(cityPrefab, pos, Quaternion.identity, cityTile.transform);
+
+        // помечаем, что на тайле есть здание
+        cityTile.SetBuildingPresent(true);
+
+        // цвет территории из фиксированного набора
+        Color territoryColor = GetRandomTerritoryColor();
+        territoryColor.a = cityTerritoryAlpha;
+
+        // красим тайлы в радиусе
+        int cx = cityTile.GridPosition.x;
+        int cy = cityTile.GridPosition.y;
+
+        for (int dx = -cityTerritoryRadius; dx <= cityTerritoryRadius; dx++)
+        {
+            for (int dy = -cityTerritoryRadius; dy <= cityTerritoryRadius; dy++)
+            {
+                int nx = cx + dx;
+                int ny = cy + dy;
+
+                if (nx < 0 || nx >= width || ny < 0 || ny >= height)
+                    continue;
+
+                Tile t = tiles[nx, ny];
+                if (t == null) continue;
+
+                t.SetTerritoryColor(territoryColor);
+            }
+        }
+
+        // фокусируем камеру на город
+        CameraController cam = FindObjectOfType<CameraController>();
+        if (cam != null)
+        {
+            cam.JumpToPosition(cityTile.transform.position);
+        }
     }
 }

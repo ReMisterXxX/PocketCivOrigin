@@ -1,6 +1,6 @@
-using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using System.Collections;
 
 public enum TileTerrainType
 {
@@ -26,6 +26,13 @@ public class Tile : MonoBehaviour
     {
         TopHeight = value;
     }
+
+    [Header("Territory")]
+    public Renderer territoryRenderer;        // рендерер цветного "стекла" над тайлом
+    [Range(0f, 1f)]
+    public float territoryAlpha = 0.55f;      // запасной вариант прозрачности
+
+    public Color? TerritoryColor { get; private set; }
 
     public void Init(Vector2Int gridPos, TileTerrainType terrain)
     {
@@ -87,16 +94,13 @@ public class Tile : MonoBehaviour
 
     private Coroutine selectionCoroutine;
 
-    private void Awake()
-    {
-        // Базовая позиция тайла запоминается один раз
-        baseTilePosition = transform.position;
-    }
-
     public void SelectTile()
     {
         if (isSelected) return;
         isSelected = true;
+
+        // запоминаем базовую позицию тайла (на земле)
+        baseTilePosition = transform.position;
 
         // если уже шла анимация — останавливаем
         if (selectionCoroutine != null)
@@ -125,6 +129,7 @@ public class Tile : MonoBehaviour
             StopCoroutine(selectionCoroutine);
 
         selectionCoroutine = StartCoroutine(AnimateSelection(false));
+
         // Outline выключаем в конце анимации (в корутине)
     }
 
@@ -157,8 +162,8 @@ public class Tile : MonoBehaviour
         {
             startColor = surfaceRenderer.material.color;
             targetColor = select
-                ? originalSurfaceColor * 1.3f   // делаем ярче
-                : originalSurfaceColor;        // возвращаем исходный
+                ? originalSurfaceColor * 1.15f   // мягкая подсветка, чтобы территория не терялась
+                : originalSurfaceColor;         // возвращаем исходный
         }
 
         float t = 0f;
@@ -198,5 +203,40 @@ public class Tile : MonoBehaviour
         }
 
         selectionCoroutine = null;
+    }
+
+    // ======== ТЕРРИТОРИЯ ГОРОДА ========
+    public void SetTerritoryColor(Color color)
+    {
+        TerritoryColor = color;
+
+        if (territoryRenderer == null)
+            return;
+
+        territoryRenderer.gameObject.SetActive(true);
+
+        // усиливаем насыщенность и слегка яркость
+        Color.RGBToHSV(color, out float h, out float s, out float v);
+        s = Mathf.Clamp01(s * 1.3f);
+        v = Mathf.Clamp01(v * 1.1f);
+        Color col = Color.HSVToRGB(h, s, v);
+
+        // если в color альфа > 0 — используем её, иначе берём territoryAlpha
+        float alpha = color.a > 0f ? color.a : territoryAlpha;
+        col.a = alpha;
+
+        // отдельный экземпляр материала, чтобы цвет был уникальный
+        Material mat = territoryRenderer.material;
+        mat.color = col;
+    }
+
+    public void ClearTerritory()
+    {
+        TerritoryColor = null;
+
+        if (territoryRenderer == null)
+            return;
+
+        territoryRenderer.gameObject.SetActive(false);
     }
 }

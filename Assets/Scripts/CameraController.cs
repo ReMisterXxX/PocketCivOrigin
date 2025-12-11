@@ -2,97 +2,102 @@ using UnityEngine;
 
 public class CameraController : MonoBehaviour
 {
-    [Header("Движение")]
-    public float moveSpeed = 10f;
+    [Header("Movement")]
+    public float moveSpeed = 12f;          // скорость перемещения фокуса (WASD)
+    public float rotationSpeed = 120f;     // скорость вращения (правая кнопка мыши)
+    public float zoomSpeed = 20f;          // скорость зума колёсиком
 
-    [Header("Поворот вокруг точки")]
-    public float rotationSpeed = 120f;   // скорость поворота при зажатой ПКМ
+    [Header("Zoom limits")]
+    public float minDistance = 6f;
+    public float maxDistance = 40f;
 
-    [Header("Зум (расстояние до точки)")]
-    public float zoomSpeed = 20f;
-    public float minDistance = 5f;
-    public float maxDistance = 60f;
+    [Header("Pitch limits")]
+    public float minPitch = 20f;
+    public float maxPitch = 80f;
 
-    // Точка, вокруг которой вращаемся и к которой зумимся
-    private Vector3 focusPoint;
+    // Точка, вокруг которой крутим камеру (центр обзора)
+    private Vector3 focusPoint = Vector3.zero;
+
+    // Расстояние до фокуса и углы
+    private float distance = 15f;
+    private float yaw = 45f;
+    private float pitch = 45f;
 
     private void Start()
     {
-        // Пытаемся найти точку на "земле" (плоскость Y = 0), куда сейчас смотрит камера
-        Plane groundPlane = new Plane(Vector3.up, Vector3.zero);
-        Ray ray = new Ray(transform.position, transform.forward);
+        // Инициализируем фокус из текущего положения камеры
+        // Берём точку "вперёд" от камеры на некоторое расстояние
+        focusPoint = transform.position + transform.forward * 10f;
 
-        if (groundPlane.Raycast(ray, out float enter))
-        {
-            focusPoint = ray.GetPoint(enter);
-        }
-        else
-        {
-            // Если не получилось — берём (0,0,0)
-            focusPoint = Vector3.zero;
-        }
+        Vector3 toCam = transform.position - focusPoint;
+        distance = toCam.magnitude;
+
+        Vector3 angles = transform.eulerAngles;
+        yaw = angles.y;
+        pitch = angles.x;
     }
 
-    private void Update()
+    private void LateUpdate()
     {
-        HandleMovement();
-        HandleRotation();
-        HandleZoom();
+        HandleInput();
+        UpdateCameraTransform();
     }
 
-    // Движение вперёд/назад/влево/вправо относительно направления камеры
-    private void HandleMovement()
+    private void HandleInput()
     {
-        float h = Input.GetAxisRaw("Horizontal"); // A/D или стрелки
-        float v = Input.GetAxisRaw("Vertical");   // W/S или стрелки
-
-        Vector3 forward = transform.forward;
-        forward.y = 0f;
-        forward.Normalize();
-
-        Vector3 right = transform.right;
-        right.y = 0f;
-        right.Normalize();
-
-        Vector3 moveDir = forward * v + right * h;
-
-        if (moveDir.sqrMagnitude > 0.001f)
+        // ВРАЩЕНИЕ ВОКРУГ ФОКУСА (ПКМ зажата)
+        if (Input.GetMouseButton(1))
         {
-            Vector3 move = moveDir * moveSpeed * Time.deltaTime;
-            // Двигаем и камеру, и фокусную точку
-            transform.position += move;
-            focusPoint += move;
+            float dx = Input.GetAxis("Mouse X");
+            float dy = Input.GetAxis("Mouse Y");
+
+            yaw += dx * rotationSpeed * Time.deltaTime;
+            pitch -= dy * rotationSpeed * Time.deltaTime;
+            pitch = Mathf.Clamp(pitch, minPitch, maxPitch);
         }
-    }
 
-    // Поворот вокруг focusPoint при зажатой ПКМ
-    private void HandleRotation()
-    {
-        if (Input.GetMouseButton(1)) // правая кнопка мыши
-        {
-            float mouseX = Input.GetAxis("Mouse X");
-
-            // Вращаем камеру вокруг фокусной точки по оси Y
-            transform.RotateAround(focusPoint, Vector3.up, mouseX * rotationSpeed * Time.deltaTime);
-        }
-    }
-
-    // Зум: приближаемся/отдаляемся к focusPoint
-    private void HandleZoom()
-    {
+        // ЗУМ КОЛЁСИКОМ
         float scroll = Input.GetAxis("Mouse ScrollWheel");
-        if (Mathf.Abs(scroll) > 0.001f)
+        if (Mathf.Abs(scroll) > 0.0001f)
         {
-            // Вектор от фокусной точки до камеры
-            Vector3 dir = (transform.position - focusPoint).normalized;
-            float distance = Vector3.Distance(transform.position, focusPoint);
-
-            // Меняем расстояние
             distance -= scroll * zoomSpeed;
             distance = Mathf.Clamp(distance, minDistance, maxDistance);
-
-            // Новая позиция камеры на том же луче
-            transform.position = focusPoint + dir * distance;
         }
+
+        // ПЕРЕМЕЩЕНИЕ ФОКУСА (WASD) в горизонтальной плоскости
+        Vector3 forward = new Vector3(transform.forward.x, 0f, transform.forward.z).normalized;
+        Vector3 right   = new Vector3(transform.right.x, 0f, transform.right.z).normalized;
+
+        Vector3 move = Vector3.zero;
+        if (Input.GetKey(KeyCode.W)) move += forward;
+        if (Input.GetKey(KeyCode.S)) move -= forward;
+        if (Input.GetKey(KeyCode.D)) move += right;
+        if (Input.GetKey(KeyCode.A)) move -= right;
+
+        if (move.sqrMagnitude > 0f)
+        {
+            move.Normalize();
+            focusPoint += move * moveSpeed * Time.deltaTime;
+        }
+    }
+
+    private void UpdateCameraTransform()
+    {
+        // Считаем позицию камеры из углов и расстояния до фокуса
+        Quaternion rot = Quaternion.Euler(pitch, yaw, 0f);
+        Vector3 offset = rot * new Vector3(0f, 0f, -distance); // камера позади фокуса
+
+        transform.position = focusPoint + offset;
+        transform.rotation = rot;
+    }
+
+    /// <summary>
+    /// Мгновенно переносит фокус камеры к указанной точке.
+    /// Камера продолжает крутиться вокруг НОВОЙ точки.
+    /// </summary>
+    public void JumpToPosition(Vector3 worldPos)
+    {
+        focusPoint = worldPos;
+        // Положение и поворот пересчитаются в LateUpdate()
     }
 }

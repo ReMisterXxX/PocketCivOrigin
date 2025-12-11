@@ -1297,6 +1297,8 @@ MonoBehaviour:
   zoomSpeed: 25
   minDistance: 3
   maxDistance: 10
+  minPitch: 20
+  maxPitch: 80
 --- !u!114 &963194230
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1640,6 +1642,9 @@ MonoBehaviour:
   mountainDecorationOffset: 0.15
   waterDecorationOffset: 0.02
   groundBottomY: -1
+  cityPrefab: {fileID: 2058571922317989368, guid: 630a07f741ac70d4b8f9eb120f00e3c0, type: 3}
+  cityTerritoryRadius: 2
+  cityTerritoryAlpha: 0.45
 --- !u!4 &1368849117
 Transform:
   m_ObjectHideFlags: 0
