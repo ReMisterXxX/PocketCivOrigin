@@ -152,6 +152,7 @@ public class TileInfoUI : MonoBehaviour
 
         string heightCategory = GetHeightCategory(currentTile.TopHeight);
         string biome = GetBiomeName(currentTile.TerrainType);
+        string deposit = GetDepositText(currentTile);
 
         detailsText.text =
             $"<b>Coordinates:</b> {currentTile.GridPosition.x}, {currentTile.GridPosition.y}\n\n" +
@@ -160,7 +161,8 @@ public class TileInfoUI : MonoBehaviour
             $"<b>Contents:</b>\n" +
             $"- Decorations: {currentTile.Decorations.Count}\n" +
             $"- Unit: {(currentTile.HasUnit ? "Present" : "None")}\n" +
-            $"- Building: {(currentTile.HasBuilding ? "Present" : "None")}";
+            $"- Building: {(currentTile.HasBuilding ? "Present" : "None")}\n" +
+            $"- Deposit: {deposit}";
 
         if (detailsAnimCoroutine != null)
             StopCoroutine(detailsAnimCoroutine);
@@ -290,6 +292,25 @@ public class TileInfoUI : MonoBehaviour
             case TileTerrainType.Mountain: return "Mountain";
             case TileTerrainType.Water:    return "Water";
             default:                       return type.ToString();
+        }
+    }
+
+    /// <summary>
+    /// Текст для строки о месторождении на тайле.
+    /// </summary>
+    private string GetDepositText(Tile tile)
+    {
+        if (tile == null || !tile.HasResourceDeposit || tile.ResourceDeposit == null)
+            return "None";
+
+        switch (tile.ResourceDeposit.type)
+        {
+            case ResourceType.Gold:
+                return "Gold vein";
+            case ResourceType.Coal:
+                return "Coal vein";
+            default:
+                return "None";
         }
     }
 }

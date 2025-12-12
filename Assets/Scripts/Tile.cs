@@ -1,6 +1,6 @@
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using System.Collections;
 
 public enum TileTerrainType
 {
@@ -15,10 +15,14 @@ public class Tile : MonoBehaviour
     public Vector2Int GridPosition { get; private set; }
     public TileTerrainType TerrainType { get; private set; }
 
-    // Владелец тайла (может быть None)
+    // Владелец тайла
     public PlayerId Owner { get; private set; } = PlayerId.None;
 
-    // список всех декораций на тайле
+    // Месторождение на тайле (если есть)
+    public ResourceDeposit ResourceDeposit { get; private set; }
+    public bool HasResourceDeposit => ResourceDeposit != null;
+
+    // Список всех декораций на тайле
     public List<GameObject> Decorations { get; } = new List<GameObject>();
 
     public bool HasUnit { get; private set; }
@@ -35,12 +39,10 @@ public class Tile : MonoBehaviour
         Owner = owner;
     }
 
-    [Header("Territory")]
-    public Renderer territoryRenderer;        // рендерер цветного "стекла" над тайлом
-    [Range(0f, 1f)]
-    public float territoryAlpha = 0.55f;      // запасной вариант прозрачности
-
-    public Color? TerritoryColor { get; private set; }
+    public void SetResourceDeposit(ResourceDeposit deposit)
+    {
+        ResourceDeposit = deposit;
+    }
 
     public void Init(Vector2Int gridPos, TileTerrainType terrain)
     {
@@ -58,21 +60,23 @@ public class Tile : MonoBehaviour
         }
     }
 
-    // ЮНИТ ЗАШЁЛ НА ТАЙЛ
+    // ===== ЮНИТЫ / ПОСТРОЙКИ =====
+
+    // Юнит зашёл на тайл
     public void OnUnitEnter()
     {
         HasUnit = true;
         UpdateDecorationVisibility();
     }
 
-    // ЮНИТ ПОКИНУЛ ТАЙЛ
+    // Юнит покинул тайл
     public void OnUnitLeave()
     {
         HasUnit = false;
         UpdateDecorationVisibility();
     }
 
-    // ПОСТРОЙКА ПОЯВИЛАСЬ / ИСЧЕЗЛА
+    // На тайле появилась/исчезла постройка
     public void SetBuildingPresent(bool hasBuilding)
     {
         HasBuilding = hasBuilding;
@@ -90,10 +94,11 @@ public class Tile : MonoBehaviour
         }
     }
 
-    // ======== ВЫДЕЛЕНИЕ ТАЙЛА (С АНИМАЦИЕЙ) ========
+    // ====== ВЫДЕЛЕНИЕ ТАЙЛА (АНИМАЦИЯ ПОДСКОКА + ПОДСВЕТКА) ======
+
     [Header("Selection")]
-    public float selectionOffset = 0.3f;    // на сколько поднимать тайл
-    public float selectionDuration = 0.12f; // длительность анимации
+    public float selectionOffset = 0.3f;    // Насколько поднимать тайл при выделении
+    public float selectionDuration = 0.12f; // Длительность анимации
 
     private bool isSelected = false;
     private Vector3 baseTilePosition;
@@ -107,16 +112,14 @@ public class Tile : MonoBehaviour
         if (isSelected) return;
         isSelected = true;
 
-        // запоминаем базовую позицию тайла (на земле)
         baseTilePosition = transform.position;
 
-        // если уже шла анимация — останавливаем
         if (selectionCoroutine != null)
             StopCoroutine(selectionCoroutine);
 
         selectionCoroutine = StartCoroutine(AnimateSelection(true));
 
-        // включаем Outline сразу (чтобы не мигал)
+        // Включаем Outline сразу
         Transform surface = transform.Find("Surface");
         if (surface != null)
         {
@@ -137,8 +140,6 @@ public class Tile : MonoBehaviour
             StopCoroutine(selectionCoroutine);
 
         selectionCoroutine = StartCoroutine(AnimateSelection(false));
-
-        // Outline выключаем в конце анимации (в корутине)
     }
 
     private IEnumerator AnimateSelection(bool select)
@@ -151,7 +152,6 @@ public class Tile : MonoBehaviour
             surfaceRenderer = surface.GetComponent<Renderer>();
         }
 
-        // запоминаем исходный цвет один раз
         if (surfaceRenderer != null && !hasOriginalColor)
         {
             originalSurfaceColor = surfaceRenderer.material.color;
@@ -170,7 +170,7 @@ public class Tile : MonoBehaviour
         {
             startColor = surfaceRenderer.material.color;
             targetColor = select
-                ? originalSurfaceColor * 1.15f   // мягкая подсветка
+                ? originalSurfaceColor * 1.15f  // немного ярче при выделении
                 : originalSurfaceColor;
         }
 
@@ -181,10 +181,8 @@ public class Tile : MonoBehaviour
             t += Time.deltaTime / selectionDuration;
             float tt = Mathf.SmoothStep(0f, 1f, t);
 
-            // позиция
             transform.position = Vector3.Lerp(startPos, targetPos, tt);
 
-            // цвет
             if (surfaceRenderer != null)
             {
                 surfaceRenderer.material.color = Color.Lerp(startColor, targetColor, tt);
@@ -193,14 +191,14 @@ public class Tile : MonoBehaviour
             yield return null;
         }
 
-        // гарантирую финальные значения
         transform.position = targetPos;
+
         if (surfaceRenderer != null)
         {
             surfaceRenderer.material.color = targetColor;
         }
 
-        // если это снятие выделения — выключаем Outline
+        // При снятии выделения выключаем Outline
         if (!select && surface != null)
         {
             Transform outline = surface.Find("Outline");
@@ -213,7 +211,15 @@ public class Tile : MonoBehaviour
         selectionCoroutine = null;
     }
 
-    // ======== ТЕРРИТОРИЯ ГОРОДА ========
+    // ====== ТЕРРИТОРИЯ (ЦВЕТНОЕ "СТЕКЛО") ======
+
+    [Header("Territory")]
+    public Renderer territoryRenderer;
+    [Range(0f, 1f)]
+    public float territoryAlpha = 0.55f;
+
+    public Color? TerritoryColor { get; private set; }
+
     public void SetTerritoryColor(Color color)
     {
         TerritoryColor = color;
@@ -223,17 +229,15 @@ public class Tile : MonoBehaviour
 
         territoryRenderer.gameObject.SetActive(true);
 
-        // усиливаем насыщенность и чуть яркость
+        // Делаем цвет чуть более насыщенным и ярким
         Color.RGBToHSV(color, out float h, out float s, out float v);
         s = Mathf.Clamp01(s * 1.3f);
         v = Mathf.Clamp01(v * 1.1f);
         Color col = Color.HSVToRGB(h, s, v);
 
-        // если в color альфа > 0 — используем её, иначе берём territoryAlpha
         float alpha = color.a > 0f ? color.a : territoryAlpha;
         col.a = alpha;
 
-        // отдельный экземпляр материала, чтобы цвет был уникальный
         Material mat = territoryRenderer.material;
         mat.color = col;
     }

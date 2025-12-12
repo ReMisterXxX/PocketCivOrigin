@@ -27,11 +27,11 @@ public class MapGenerator : MonoBehaviour
     public GameObject[] waterDecorPrefabs;     // по желанию
 
     [Header("Количество декораций на тайл")]
-    public Vector2Int grassTreesCount     = new Vector2Int(0, 2);  // 0–2 деревьев на полях
-    public Vector2Int forestTreesCount    = new Vector2Int(3, 5);  // 3–5 деревьев в лесу
-    public Vector2Int grassPlantsCount    = new Vector2Int(5, 7);  // 5–7 пучков травы на поле
-    public Vector2Int grassFlowersCount   = new Vector2Int(3, 4);  // 3–4 цветка на поле
-    public Vector2Int forestGrassPerTile  = new Vector2Int(4, 7);  // 4–7 пучков травы в лесу
+    public Vector2Int grassTreesCount    = new Vector2Int(0, 2);  // 0–2 деревьев на полях
+    public Vector2Int forestTreesCount   = new Vector2Int(3, 5);  // 3–5 деревьев в лесу
+    public Vector2Int grassPlantsCount   = new Vector2Int(5, 7);  // 5–7 пучков травы на поле
+    public Vector2Int grassFlowersCount  = new Vector2Int(3, 4);  // 3–4 цветка на поле
+    public Vector2Int forestGrassPerTile = new Vector2Int(4, 7);  // 4–7 пучков травы в лесу
 
     [Header("Разброс декора по тайлу (по XZ)")]
     public float decorationSpread = 0.7f; // 0.7 тайла по ширине
@@ -75,6 +75,17 @@ public class MapGenerator : MonoBehaviour
     [Header("Игроки")]
     public PlayerId startingPlayer = PlayerId.Player1; // владелец стартового города
 
+    [Header("Resource deposits (поля/общие префабы)")]
+    public GameObject[] goldDepositPrefabs;   // золото на равнинах/в лесу
+    public GameObject[] coalDepositPrefabs;   // уголь на равнинах/в лесу
+
+    [Header("Resource deposits для гор")]
+    public GameObject[] goldMountainDepositPrefabs; // золото в горах
+    public GameObject[] coalMountainDepositPrefabs; // уголь в горах
+
+    public int maxGoldDeposits = 6;
+    public int maxCoalDeposits = 6;
+
     private Tile[,] tiles;
 
     private void Start()
@@ -117,8 +128,11 @@ public class MapGenerator : MonoBehaviour
             }
         }
 
-        // создаём стартовый город и фокусируем камеру
+        // 1) создаём стартовый город и фокусируем камеру
         SpawnStartingCityAndFocusCamera();
+
+        // 2) генерируем месторождения
+        GenerateResourceDeposits();
     }
 
     private void ClearOldMap()
@@ -422,7 +436,7 @@ public class MapGenerator : MonoBehaviour
         pos.y = cityTile.TopHeight + 0.01f;
 
         // делаем город дочерним объектом тайла, чтобы он поднимался вместе с ним
-        GameObject cityGO = Object.Instantiate(cityPrefab, pos, Quaternion.identity, cityTile.transform);
+        GameObject cityGO = Instantiate(cityPrefab, pos, Quaternion.identity, cityTile.transform);
 
         // помечаем, что на тайле есть здание и владелец
         cityTile.SetBuildingPresent(true);
@@ -450,16 +464,221 @@ public class MapGenerator : MonoBehaviour
                 if (t == null) continue;
 
                 t.SetTerritoryColor(territoryColor);
-                // если захочешь считать, какие тайлы принадлежат игроку — можно тоже ставить owner
-                // t.SetOwner(startingPlayer);
+                t.SetOwner(startingPlayer);
             }
         }
 
         // фокусируем камеру на город
-        CameraController cam = Object.FindObjectOfType<CameraController>();
+        CameraController cam = FindObjectOfType<CameraController>();
         if (cam != null)
         {
             cam.JumpToPosition(cityTile.transform.position);
         }
+    }
+
+    // ====== Генерация ресурсных месторождений ======
+    private void GenerateResourceDeposits()
+    {
+        bool hasGoldPrefabs =
+            (goldDepositPrefabs != null && goldDepositPrefabs.Length > 0) ||
+            (goldMountainDepositPrefabs != null && goldMountainDepositPrefabs.Length > 0);
+
+        bool hasCoalPrefabs =
+            (coalDepositPrefabs != null && coalDepositPrefabs.Length > 0) ||
+            (coalMountainDepositPrefabs != null && coalMountainDepositPrefabs.Length > 0);
+
+        if (!hasGoldPrefabs || !hasCoalPrefabs)
+        {
+            Debug.LogWarning("Deposit prefabs are not assigned for gold/coal!");
+            return;
+        }
+
+        List<Tile> goldCandidates = new List<Tile>();
+        List<Tile> coalCandidates = new List<Tile>();
+
+        for (int x = 0; x < width; x++)
+        {
+            for (int y = 0; y < height; y++)
+            {
+                Tile t = tiles[x, y];
+                if (t == null) continue;
+
+                if (t.TerrainType == TileTerrainType.Water) continue; // не на воде
+                if (t.HasBuilding) continue;                           // не под городом
+                if (t.HasResourceDeposit) continue;                    // не дублировать
+
+                // В горах — только на краю "грядки"
+                if (t.TerrainType == TileTerrainType.Mountain &&
+                    !IsMountainEdgeTile(x, y))
+                {
+                    continue;
+                }
+
+                // Под месторождения подходят и поля, и леса, и край гор
+                goldCandidates.Add(t);
+                coalCandidates.Add(t);
+            }
+        }
+
+        // глобальный спавн золота
+        int goldToSpawn = Mathf.Min(maxGoldDeposits, goldCandidates.Count);
+        for (int i = 0; i < goldToSpawn; i++)
+        {
+            int index = Random.Range(0, goldCandidates.Count);
+            Tile t = goldCandidates[index];
+            PlaceResourceDeposit(t,
+                goldDepositPrefabs,
+                goldMountainDepositPrefabs,
+                ResourceType.Gold);
+            goldCandidates.RemoveAt(index);
+        }
+
+        // глобальный спавн угля
+        int coalToSpawn = Mathf.Min(maxCoalDeposits, coalCandidates.Count);
+        for (int i = 0; i < coalToSpawn; i++)
+        {
+            int index = Random.Range(0, coalCandidates.Count);
+            Tile t = coalCandidates[index];
+            PlaceResourceDeposit(t,
+                coalDepositPrefabs,
+                coalMountainDepositPrefabs,
+                ResourceType.Coal);
+            coalCandidates.RemoveAt(index);
+        }
+
+        // гарантируем, что на территории стартового игрока
+        // есть хотя бы по одному месторождению каждого типа
+        EnsureDepositInPlayerTerritory(
+            ResourceType.Gold,
+            goldDepositPrefabs,
+            goldMountainDepositPrefabs,
+            startingPlayer);
+
+        EnsureDepositInPlayerTerritory(
+            ResourceType.Coal,
+            coalDepositPrefabs,
+            coalMountainDepositPrefabs,
+            startingPlayer);
+    }
+
+    private bool IsMountainEdgeTile(int x, int y)
+    {
+        Tile t = tiles[x, y];
+        if (t == null || t.TerrainType != TileTerrainType.Mountain)
+            return false;
+
+        // соседние клетки (4 направления)
+        int[] dx = new int[] { -1, 1, 0, 0 };
+        int[] dy = new int[] { 0, 0, -1, 1 };
+
+        for (int i = 0; i < 4; i++)
+        {
+            int nx = x + dx[i];
+            int ny = y + dy[i];
+
+            if (nx < 0 || nx >= width || ny < 0 || ny >= height)
+                continue;
+
+            Tile n = tiles[nx, ny];
+            if (n == null) continue;
+
+            // если рядом не гора — значит, этот горный тайл на краю
+            if (n.TerrainType != TileTerrainType.Mountain)
+                return true;
+        }
+
+        return false;
+    }
+
+    private void EnsureDepositInPlayerTerritory(
+        ResourceType type,
+        GameObject[] genericPrefabs,
+        GameObject[] mountainPrefabs,
+        PlayerId player)
+    {
+        bool alreadyHas = false;
+        List<Tile> candidates = new List<Tile>();
+
+        foreach (Tile t in tiles)
+        {
+            if (t == null) continue;
+            if (t.Owner != player) continue;
+
+            if (t.HasResourceDeposit && t.ResourceDeposit.type == type)
+            {
+                alreadyHas = true;
+                break;
+            }
+
+            if (t.HasBuilding) continue;
+            if (t.TerrainType == TileTerrainType.Water) continue;
+            if (t.HasResourceDeposit) continue;
+
+            if (t.TerrainType == TileTerrainType.Mountain &&
+                !IsMountainEdgeTile(t.GridPosition.x, t.GridPosition.y))
+                continue;
+
+            candidates.Add(t);
+        }
+
+        if (alreadyHas) return;
+        if (candidates.Count == 0) return;
+
+        Tile target = candidates[Random.Range(0, candidates.Count)];
+        PlaceResourceDeposit(target, genericPrefabs, mountainPrefabs, type);
+    }
+
+    private void PlaceResourceDeposit(
+        Tile tile,
+        GameObject[] genericPrefabs,
+        GameObject[] mountainPrefabs,
+        ResourceType type)
+    {
+        if (tile == null) return;
+        if (tile.HasResourceDeposit) return;
+
+        // выбираем правильный пул префабов
+        GameObject[] sourceArray = genericPrefabs;
+
+        if (tile.TerrainType == TileTerrainType.Mountain &&
+            mountainPrefabs != null && mountainPrefabs.Length > 0)
+        {
+            sourceArray = mountainPrefabs;
+        }
+
+        if (sourceArray == null || sourceArray.Length == 0) return;
+
+        GameObject prefab = sourceArray[Random.Range(0, sourceArray.Length)];
+        if (prefab == null) return;
+
+        // Если это горный тайл — убираем горный декор,
+        // чтобы месторождение не утонуло в скале.
+        if (tile.TerrainType == TileTerrainType.Mountain)
+        {
+            foreach (var deco in tile.Decorations)
+            {
+                if (deco != null)
+                    Object.Destroy(deco);
+            }
+            tile.Decorations.Clear();
+        }
+
+        // ставим месторождение по центру тайла, чуть над верхом тайла
+        Vector3 pos = tile.transform.position;
+        pos.y = tile.TopHeight + 0.02f;   // УЧЁТ ВЫСОТЫ ТАЙЛА ДЛЯ ЛЮБОГО БИОМА
+
+        GameObject go = Instantiate(prefab, pos, Quaternion.identity, tile.transform);
+
+        ResourceDeposit deposit = go.GetComponent<ResourceDeposit>();
+        if (deposit == null)
+        {
+            deposit = go.AddComponent<ResourceDeposit>();
+        }
+
+        deposit.Init(tile, type);
+        tile.SetResourceDeposit(deposit);
+
+        // хотим, чтобы под юнитом/зданием месторождение скрывалось
+        tile.RegisterDecoration(go);
     }
 }

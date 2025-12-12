@@ -12,7 +12,6 @@ public enum PlayerId
 
 public static class PlayerColorManager
 {
-    // Фиксированный пул цветов для игроков
     private static readonly Color[] colorPool = new Color[]
     {
         new Color(0.95f, 0.10f, 0.10f), // Red
@@ -25,27 +24,18 @@ public static class PlayerColorManager
         new Color(0.95f, 0.85f, 0.10f), // Yellow
     };
 
-    // К каким игрокам уже какие цвета привязаны
     private static readonly Dictionary<PlayerId, Color> assignedColors = new Dictionary<PlayerId, Color>();
 
-    /// <summary>
-    /// Очистить назначения цветов (например, при рестарте игры).
-    /// </summary>
     public static void Reset()
     {
         assignedColors.Clear();
     }
 
-    /// <summary>
-    /// Получить цвет игрока. Один и тот же PlayerId всегда получает один и тот же цвет.
-    /// Разным игрокам выдаются разные цвета, пока не закончится пул.
-    /// </summary>
     public static Color GetColor(PlayerId playerId)
     {
         if (assignedColors.TryGetValue(playerId, out var existing))
             return existing;
 
-        // Ищем первый свободный цвет
         foreach (var c in colorPool)
         {
             if (!assignedColors.ContainsValue(c))
@@ -55,7 +45,7 @@ public static class PlayerColorManager
             }
         }
 
-        // Если игроков больше, чем цветов — начинаем повторять с первого (на твой случай этого пока не будет)
+        // если игроков больше чем цветов — начнём повторять (на твой случай не критично)
         Color fallback = colorPool[0];
         assignedColors[playerId] = fallback;
         return fallback;
