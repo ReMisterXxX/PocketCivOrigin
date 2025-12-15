@@ -8,7 +8,6 @@ public class TurnManager : MonoBehaviour
 
     public int currentTurn = 1;
 
-    // Делаем Start корутиной, чтобы можно было подождать один кадр
     private IEnumerator Start()
     {
         if (playerResources == null)
@@ -17,13 +16,13 @@ public class TurnManager : MonoBehaviour
         if (topPanelUI == null)
             topPanelUI = FindObjectOfType<ResourceTopPanelUI>();
 
-        // Ждём один кадр, чтобы MapGenerator успел создать карту и месторождения
+        // Ждём один кадр, чтобы карта и жилы успели создаться
         yield return null;
 
         if (playerResources != null)
         {
-            // Считаем доход уже ПОСЛЕ появления всех жил
-            playerResources.RecalculateIncomeFromDeposits();
+            // На старте считаем доход (без попапов)
+            playerResources.RecalculateIncomeFromDeposits(false);
         }
 
         if (topPanelUI != null && playerResources != null)
@@ -37,11 +36,11 @@ public class TurnManager : MonoBehaviour
     {
         if (playerResources != null)
         {
-            // 1) Добавляем доход к запасам
-            playerResources.ApplyTurnIncome();
+            // 1. Пересчитываем доходы и показываем попапы над жилами
+            playerResources.RecalculateIncomeFromDeposits(true);
 
-            // 2) На случай, если за ход построили шахты/новые города
-            playerResources.RecalculateIncomeFromDeposits();
+            // 2. Начисляем этот доход в ресурсы
+            playerResources.ApplyTurnIncome();
         }
 
         currentTurn++;

@@ -3537,6 +3537,8 @@ MonoBehaviour:
   coalValueText: {fileID: 1974977084}
   coalIncomeText: {fileID: 1423664291}
   turnText: {fileID: 839018996}
+  jumpDuration: 0.15
+  jumpScale: 1.2
 --- !u!4 &1783588503
 Transform:
   m_ObjectHideFlags: 0
@@ -3598,10 +3600,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   owner: 0
-  Gold: 10
-  Coal: 10
-  GoldIncome: 0
-  CoalIncome: 0
+  gold: 10
+  coal: 10
+  goldIncome: 0
+  coalIncome: 0
+  goldPopupColor: {r: 1, g: 0.9, b: 0.3, a: 1}
+  coalPopupColor: {r: 0.3, g: 0.3, b: 0.35, a: 1}
 --- !u!4 &1846007009
 Transform:
   m_ObjectHideFlags: 0
