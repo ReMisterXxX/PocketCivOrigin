@@ -12,6 +12,19 @@ public enum TileTerrainType
 
 public class Tile : MonoBehaviour
 {
+    // ===== Tile Registry (для поиска по GridPosition) =====
+    private static readonly Dictionary<Vector2Int, Tile> registry = new Dictionary<Vector2Int, Tile>();
+
+    public static bool TryGetTile(Vector2Int pos, out Tile tile) => registry.TryGetValue(pos, out tile);
+
+    private void OnDestroy()
+    {
+        if (registry.ContainsKey(GridPosition) && registry[GridPosition] == this)
+            registry.Remove(GridPosition);
+    }
+
+    // =====================================================
+
     public Vector2Int GridPosition { get; private set; }
     public TileTerrainType TerrainType { get; private set; }
 
@@ -27,7 +40,13 @@ public class Tile : MonoBehaviour
 
     public bool HasUnit { get; private set; }
     public bool HasBuilding { get; private set; }
+
+    public bool HasCity { get; private set; }
+
     public float TopHeight { get; private set; }
+
+    // ✅ Юнит на тайле (реальная ссылка)
+    public Unit UnitOnTile { get; private set; }
 
     public void SetTopHeight(float value)
     {
@@ -50,6 +69,9 @@ public class Tile : MonoBehaviour
         TerrainType = terrain;
 
         gameObject.name = $"Tile_{gridPos.x}_{gridPos.y}";
+
+        // регистрация
+        registry[GridPosition] = this;
     }
 
     public void RegisterDecoration(GameObject deco)
@@ -62,25 +84,46 @@ public class Tile : MonoBehaviour
 
     // ===== ЮНИТЫ / ПОСТРОЙКИ =====
 
-    // Юнит зашёл на тайл
+    public void AssignUnit(Unit unit)
+    {
+        UnitOnTile = unit;
+        HasUnit = (unit != null);
+        UpdateDecorationVisibility();
+    }
+
+    public void ClearUnit(Unit unit)
+    {
+        if (UnitOnTile == unit)
+        {
+            UnitOnTile = null;
+            HasUnit = false;
+            UpdateDecorationVisibility();
+        }
+    }
+
+    // (старые методы оставляем для совместимости)
     public void OnUnitEnter()
     {
         HasUnit = true;
         UpdateDecorationVisibility();
     }
 
-    // Юнит покинул тайл
     public void OnUnitLeave()
     {
         HasUnit = false;
         UpdateDecorationVisibility();
     }
 
-    // На тайле появилась/исчезла постройка
     public void SetBuildingPresent(bool hasBuilding)
     {
         HasBuilding = hasBuilding;
         UpdateDecorationVisibility();
+    }
+
+    public void SetCityPresent(bool hasCity)
+    {
+        HasCity = hasCity;
+        SetBuildingPresent(hasCity);
     }
 
     private void UpdateDecorationVisibility()
@@ -97,8 +140,8 @@ public class Tile : MonoBehaviour
     // ====== ВЫДЕЛЕНИЕ ТАЙЛА (АНИМАЦИЯ ПОДСКОКА + ПОДСВЕТКА) ======
 
     [Header("Selection")]
-    public float selectionOffset = 0.3f;    // Насколько поднимать тайл при выделении
-    public float selectionDuration = 0.12f; // Длительность анимации
+    public float selectionOffset = 0.3f;
+    public float selectionDuration = 0.12f;
 
     private bool isSelected = false;
     private Vector3 baseTilePosition;
@@ -119,7 +162,6 @@ public class Tile : MonoBehaviour
 
         selectionCoroutine = StartCoroutine(AnimateSelection(true));
 
-        // Включаем Outline сразу
         Transform surface = transform.Find("Surface");
         if (surface != null)
         {
@@ -170,7 +212,7 @@ public class Tile : MonoBehaviour
         {
             startColor = surfaceRenderer.material.color;
             targetColor = select
-                ? originalSurfaceColor * 1.15f  // немного ярче при выделении
+                ? originalSurfaceColor * 1.15f
                 : originalSurfaceColor;
         }
 
@@ -198,7 +240,6 @@ public class Tile : MonoBehaviour
             surfaceRenderer.material.color = targetColor;
         }
 
-        // При снятии выделения выключаем Outline
         if (!select && surface != null)
         {
             Transform outline = surface.Find("Outline");
@@ -211,7 +252,7 @@ public class Tile : MonoBehaviour
         selectionCoroutine = null;
     }
 
-    // ====== ТЕРРИТОРИЯ (ЦВЕТНОЕ "СТЕКЛО") ======
+    // ====== ТЕРРИТОРИЯ ======
 
     [Header("Territory")]
     public Renderer territoryRenderer;
@@ -229,7 +270,6 @@ public class Tile : MonoBehaviour
 
         territoryRenderer.gameObject.SetActive(true);
 
-        // Делаем цвет чуть более насыщенным и ярким
         Color.RGBToHSV(color, out float h, out float s, out float v);
         s = Mathf.Clamp01(s * 1.3f);
         v = Mathf.Clamp01(v * 1.1f);
