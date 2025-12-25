@@ -439,10 +439,10 @@ public class MapGenerator : MonoBehaviour
         GameObject cityGO = Instantiate(cityPrefab, pos, Quaternion.identity, cityTile.transform);
 
         // помечаем, что на тайле есть здание и владелец
-        cityTile.SetBuildingPresent(true);
+        cityTile.SetCityPresent(true);
         cityTile.SetOwner(startingPlayer);
 
-        // цвет территории — цвет игрока
+        // цвет территории — цвет игрокаА
         Color territoryColor = PlayerColorManager.GetColor(startingPlayer);
         territoryColor.a = cityTerritoryAlpha;
 

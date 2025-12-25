@@ -1,5 +1,36 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
+--- !u!1 &5388509708874676720
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 5612696789890087989}
+  m_Layer: 0
+  m_Name: PopupAnchor
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &5612696789890087989
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5388509708874676720}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1156890361233440269}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1001 &1694656218227349990
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -66,6 +97,44 @@ PrefabInstance:
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
-    m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedGameObjects:
+    - targetCorrespondingSourceObject: {fileID: -8679921383154817045, guid: b23bd8e6f4bf56e4bb6e70f21f233f35, type: 3}
+      insertIndex: 0
+      addedObject: {fileID: 5612696789890087989}
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: b23bd8e6f4bf56e4bb6e70f21f233f35, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 8836725392340017174}
   m_SourcePrefab: {fileID: 100100000, guid: b23bd8e6f4bf56e4bb6e70f21f233f35, type: 3}
+--- !u!4 &1156890361233440269 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: b23bd8e6f4bf56e4bb6e70f21f233f35, type: 3}
+  m_PrefabInstance: {fileID: 1694656218227349990}
+  m_PrefabAsset: {fileID: 0}
+--- !u!1 &1965197865455461559 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 919132149155446097, guid: b23bd8e6f4bf56e4bb6e70f21f233f35, type: 3}
+  m_PrefabInstance: {fileID: 1694656218227349990}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &8836725392340017174
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1965197865455461559}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4ece7d00dd89ce844830edf6f18a46c9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  type: 1
+  baseIncome: 5
+  mineIncome: 8
+  mountainBaseIncome: 7
+  mountainMineIncome: 10
+  popupPrefab: {fileID: 302897006608372580, guid: 35f46277242fa8444a204e4bff6ea63e, type: 3}
+  popupAnchor: {fileID: 5612696789890087989}
+  popupOffsetWorld: {x: 0, y: 0.05, z: 0}
+  scalePopupWithDeposit: 1
+  hasMine: 0

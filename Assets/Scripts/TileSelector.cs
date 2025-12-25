@@ -3,7 +3,11 @@ using UnityEngine.EventSystems;
 
 public class TileSelector : MonoBehaviour
 {
+    [Header("UI")]
     public TileInfoUI tileInfoUI;
+
+    [Header("Units")]
+    public UnitMovementSystem unitMovementSystem;
 
     private Tile selectedTile = null;
 
@@ -28,38 +32,34 @@ public class TileSelector : MonoBehaviour
 
             if (tile != null)
             {
-                Select(tile);
+                SelectTile(tile);
+
+                // ✅ пробрасываем клик в систему юнитов (чтобы работало как раньше)
+                if (unitMovementSystem != null)
+                    unitMovementSystem.OnTileClicked(tile);
+
                 return;
             }
         }
 
-        // клик в пустоту — снимаем выделение
+        // кликнули в пустоту
         DeselectCurrent();
+
+        if (unitMovementSystem != null)
+            unitMovementSystem.ClearSelection();
     }
 
-    void Select(Tile tile)
+    void SelectTile(Tile tile)
     {
-        // если кликаем по уже выбранному тайлу —
-        // не трогаем выделение, просто заново показываем панель
         if (selectedTile == tile)
-        {
-            if (tileInfoUI != null)
-                tileInfoUI.ShowForTile(tile);
-
             return;
-        }
 
-        // снимаем выделение со старого тайла
         if (selectedTile != null)
-        {
             selectedTile.DeselectTile();
-        }
 
-        // выделяем новый тайл
         selectedTile = tile;
         selectedTile.SelectTile();
 
-        // показываем панель
         if (tileInfoUI != null)
             tileInfoUI.ShowForTile(selectedTile);
     }

@@ -5,26 +5,29 @@ using System.Collections;
 
 public class TileInfoUI : MonoBehaviour
 {
-    [Header("Основная панель тайла")]
-    public GameObject panel;                 // TileInfoPanel (объект с этим скриптом)
-    public TextMeshProUGUI titleText;        // "Tile (x, y)"
-    public TextMeshProUGUI infoText;         // подсказка под заголовком
+    [Header("UI References")]
+    public GameObject panel;
+    public TextMeshProUGUI titleText;
+    public TextMeshProUGUI infoText;
 
-    public Button infoButton;                // кнопка "Info"
-    public Button buildButton;               // кнопка "Build"
-    public Button mainCloseButton;           // кнопка "Close" на первой панели
+    public Button infoButton;
+    public Button buildButton;
+    public Button mainCloseButton;
 
-    [Header("Панель подробной информации")]
-    public GameObject detailsPanel;          // TileInfoDetailsPanel
-    public TextMeshProUGUI detailsText;      // текст внутри details-панели
-    public Button detailsCloseButton;        // кнопка "Close" на details-панели
+    [Header("Details Panel")]
+    public GameObject detailsPanel;
+    public TextMeshProUGUI detailsText;
+    public Button detailsCloseButton;
 
-    [Header("Параметры анимации")]
-    public float panelAnimDuration = 0.15f;  // длительность анимации появления/скрытия
+    [Header("Animation")]
+    public float panelAnimDuration = 0.15f;
+
+    // (опционально) Панель найма города — пока можешь не назначать
+    [Header("City Recruit Panel (optional)")]
+    public CityRecruitPanelUI cityRecruitPanelUI;
 
     private Tile currentTile;
 
-    // CanvasGroup для анимации
     private CanvasGroup mainCg;
     private CanvasGroup detailsCg;
 
@@ -33,184 +36,142 @@ public class TileInfoUI : MonoBehaviour
 
     private void Awake()
     {
-        // если panel не задана в инспекторе — считаем, что это текущий объект
-        if (panel == null)
-            panel = gameObject;
+        if (panel == null) panel = gameObject;
 
         mainCg = GetOrAddCanvasGroup(panel);
         detailsCg = GetOrAddCanvasGroup(detailsPanel);
 
-        // прячем панели при старте (главную — только по alpha, details — ещё и SetActive)
+        // ВАЖНО: основная панель может не деактивироваться (как у тебя было),
+        // но становиться невидимой/некликабельной — это ок.
         HideInstant(mainCg, deactivateGameObject: false);
         HideInstant(detailsCg, deactivateGameObject: true);
 
-        if (infoButton != null)
-            infoButton.onClick.AddListener(OnInfoClicked);
-
-        if (buildButton != null)
-            buildButton.onClick.AddListener(OnBuildClicked);
-
-        if (mainCloseButton != null)
-            mainCloseButton.onClick.AddListener(OnMainCloseClicked);
-
-        if (detailsCloseButton != null)
-            detailsCloseButton.onClick.AddListener(OnDetailsCloseClicked);
+        if (infoButton != null) infoButton.onClick.AddListener(OnInfoClicked);
+        if (buildButton != null) buildButton.onClick.AddListener(OnBuildClicked);
+        if (mainCloseButton != null) mainCloseButton.onClick.AddListener(OnMainCloseClicked);
+        if (detailsCloseButton != null) detailsCloseButton.onClick.AddListener(OnDetailsCloseClicked);
     }
 
-    // ================= ПЕРВАЯ ПАНЕЛЬ (СВОДКА О ТАЙЛЕ) =================
-
+    // ===== Совместимость с твоим TileSelector.cs =====
     public void ShowForTile(Tile tile)
+    {
+        Show(tile);
+    }
+
+    public void Hide()
+    {
+        OnMainCloseClicked();
+    }
+    // ===============================================
+
+    public void Show(Tile tile)
     {
         currentTile = tile;
 
-        // обновляем заголовок
         if (titleText != null && currentTile != null)
         {
             var pos = currentTile.GridPosition;
             titleText.text = $"Tile ({pos.x}, {pos.y})";
         }
 
-        // обновляем подсказку
         if (infoText != null)
-        {
             infoText.text = "Press \"Info\" to view tile details.";
-        }
 
-        // показываем основную панель
         if (mainCg != null)
         {
-            if (mainAnimCoroutine != null)
-                StopCoroutine(mainAnimCoroutine);
-
+            if (mainAnimCoroutine != null) StopCoroutine(mainAnimCoroutine);
             mainAnimCoroutine = StartCoroutine(AnimatePanel(mainCg, show: true, deactivateOnHide: false));
         }
 
-        // и на всякий случай прячем details-панель
         if (detailsCg != null)
         {
-            if (detailsAnimCoroutine != null)
-                StopCoroutine(detailsAnimCoroutine);
-
+            if (detailsAnimCoroutine != null) StopCoroutine(detailsAnimCoroutine);
             detailsAnimCoroutine = StartCoroutine(AnimatePanel(detailsCg, show: false, deactivateOnHide: true));
         }
+
+        // Если панель найма не создана/не назначена — ничего не будет.
+        if (cityRecruitPanelUI != null)
+            cityRecruitPanelUI.ShowForTile(currentTile);
     }
 
-    /// <summary>
-    /// Полное скрытие UI, используется TileSelector при снятии выделения.
-    /// </summary>
-    public void Hide()
+    private void OnInfoClicked()
     {
-        currentTile = null;
+        if (currentTile == null) return;
 
-        if (mainCg != null)
-        {
-            if (mainAnimCoroutine != null)
-                StopCoroutine(mainAnimCoroutine);
-
-            mainAnimCoroutine = StartCoroutine(AnimatePanel(mainCg, show: false, deactivateOnHide: false));
-        }
+        if (detailsText != null)
+            detailsText.text = BuildDetailsText(currentTile);
 
         if (detailsCg != null)
         {
-            if (detailsAnimCoroutine != null)
-                StopCoroutine(detailsAnimCoroutine);
-
-            detailsAnimCoroutine = StartCoroutine(AnimatePanel(detailsCg, show: false, deactivateOnHide: true));
+            if (detailsAnimCoroutine != null) StopCoroutine(detailsAnimCoroutine);
+            detailsAnimCoroutine = StartCoroutine(AnimatePanel(detailsCg, show: true, deactivateOnHide: true));
         }
     }
 
-    /// <summary>
-    /// Закрытие только основной панели по кнопке "Close".
-    /// Тайл при этом остаётся выделенным.
-    /// </summary>
+    private void OnBuildClicked()
+    {
+        if (currentTile == null) return;
+        Debug.Log($"[BUILD] (reserved) Build menu for tile {currentTile.GridPosition}");
+    }
+
     private void OnMainCloseClicked()
     {
         if (mainCg != null)
         {
-            if (mainAnimCoroutine != null)
-                StopCoroutine(mainAnimCoroutine);
-
+            if (mainAnimCoroutine != null) StopCoroutine(mainAnimCoroutine);
             mainAnimCoroutine = StartCoroutine(AnimatePanel(mainCg, show: false, deactivateOnHide: false));
         }
 
         if (detailsCg != null)
         {
-            if (detailsAnimCoroutine != null)
-                StopCoroutine(detailsAnimCoroutine);
-
+            if (detailsAnimCoroutine != null) StopCoroutine(detailsAnimCoroutine);
             detailsAnimCoroutine = StartCoroutine(AnimatePanel(detailsCg, show: false, deactivateOnHide: true));
         }
-        // currentTile НЕ обнуляем — чтобы можно было заново открыть панель по клику
-    }
 
-    // ================= ПАНЕЛЬ DETAILS (ПОДРОБНАЯ ИНФА) =================
-
-    private void OnInfoClicked()
-    {
-        if (currentTile == null || detailsCg == null || detailsText == null)
-            return;
-
-        string heightCategory = GetHeightCategory(currentTile.TopHeight);
-        string biome = GetBiomeName(currentTile.TerrainType);
-        string deposit = GetDepositText(currentTile);
-
-        detailsText.text =
-            $"<b>Coordinates:</b> {currentTile.GridPosition.x}, {currentTile.GridPosition.y}\n\n" +
-            $"<b>Biome:</b> {biome}\n" +
-            $"<b>Elevation:</b> {heightCategory}\n\n" +
-            $"<b>Contents:</b>\n" +
-            $"- Decorations: {currentTile.Decorations.Count}\n" +
-            $"- Unit: {(currentTile.HasUnit ? "Present" : "None")}\n" +
-            $"- Building: {(currentTile.HasBuilding ? "Present" : "None")}\n" +
-            $"- Deposit: {deposit}";
-
-        if (detailsAnimCoroutine != null)
-            StopCoroutine(detailsAnimCoroutine);
-
-        detailsAnimCoroutine = StartCoroutine(AnimatePanel(detailsCg, show: true, deactivateOnHide: true));
+        // закрываем панель найма (если она есть)
+        if (cityRecruitPanelUI != null)
+            cityRecruitPanelUI.HideAll();
     }
 
     private void OnDetailsCloseClicked()
     {
-        if (detailsCg == null)
-            return;
-
-        if (detailsAnimCoroutine != null)
-            StopCoroutine(detailsAnimCoroutine);
-
-        detailsAnimCoroutine = StartCoroutine(AnimatePanel(detailsCg, show: false, deactivateOnHide: true));
+        if (detailsCg != null)
+        {
+            if (detailsAnimCoroutine != null) StopCoroutine(detailsAnimCoroutine);
+            detailsAnimCoroutine = StartCoroutine(AnimatePanel(detailsCg, show: false, deactivateOnHide: true));
+        }
     }
 
-    // ================= КНОПКА BUILD (ПОКА ЗАГЛУШКА) =================
-
-    private void OnBuildClicked()
+    private string BuildDetailsText(Tile tile)
     {
-        if (currentTile == null)
-            return;
+        System.Text.StringBuilder sb = new System.Text.StringBuilder();
+        sb.AppendLine($"Terrain: {tile.TerrainType}");
+        sb.AppendLine($"Owner: {tile.Owner}");
+        sb.AppendLine($"Has Unit: {tile.HasUnit}");
+        sb.AppendLine($"Has Building: {tile.HasBuilding}");
+        sb.AppendLine($"Has City: {tile.HasCity}");
+        sb.AppendLine($"Top Height: {tile.TopHeight:F2}");
 
-        Debug.Log($"[BUILD] Build menu for tile {currentTile.GridPosition}");
-        // здесь позже будет открываться меню построек
+        if (tile.HasResourceDeposit && tile.ResourceDeposit != null)
+        {
+            sb.AppendLine();
+            sb.AppendLine($"Deposit: {tile.ResourceDeposit.type}");
+            sb.AppendLine($"Income/Turn: {tile.ResourceDeposit.GetIncomePerTurn()}");
+        }
+
+        return sb.ToString();
     }
 
-    // ================= СЛУЖЕБНЫЕ МЕТОДЫ ДЛЯ АНИМАЦИИ =================
+    // ===== Animation helpers =====
 
-    /// <summary>
-    /// Гарантированно добавляет CanvasGroup к объекту.
-    /// </summary>
     private CanvasGroup GetOrAddCanvasGroup(GameObject go)
     {
         if (go == null) return null;
-
         var cg = go.GetComponent<CanvasGroup>();
-        if (cg == null)
-            cg = go.AddComponent<CanvasGroup>();
-
+        if (cg == null) cg = go.AddComponent<CanvasGroup>();
         return cg;
     }
 
-    /// <summary>
-    /// Мгновенно прячет панель без анимации.
-    /// </summary>
     private void HideInstant(CanvasGroup cg, bool deactivateGameObject)
     {
         if (cg == null) return;
@@ -223,94 +184,35 @@ public class TileInfoUI : MonoBehaviour
             cg.gameObject.SetActive(false);
     }
 
-    /// <summary>
-    /// Универсальная анимация появления/исчезновения панели.
-    /// </summary>
     private IEnumerator AnimatePanel(CanvasGroup cg, bool show, bool deactivateOnHide)
     {
         if (cg == null) yield break;
 
-        GameObject go = cg.gameObject;
+        if (show && !cg.gameObject.activeSelf)
+            cg.gameObject.SetActive(true);
 
-        if (show && !go.activeSelf)
-            go.SetActive(true);
+        float start = cg.alpha;
+        float end = show ? 1f : 0f;
 
-        float startAlpha = cg.alpha;
-        float targetAlpha = show ? 1f : 0f;
-
-        Vector3 startScale = go.transform.localScale;
-        Vector3 targetScale = show ? Vector3.one : Vector3.one * 0.9f;
+        cg.interactable = false;
+        cg.blocksRaycasts = false;
 
         float t = 0f;
-
         while (t < panelAnimDuration)
         {
             t += Time.deltaTime;
             float k = Mathf.Clamp01(t / panelAnimDuration);
-            float ease = Mathf.SmoothStep(0f, 1f, k);
-
-            cg.alpha = Mathf.Lerp(startAlpha, targetAlpha, ease);
-            go.transform.localScale = Vector3.Lerp(startScale, targetScale, ease);
-
+            cg.alpha = Mathf.Lerp(start, end, k);
             yield return null;
         }
 
-        cg.alpha = targetAlpha;
-        go.transform.localScale = targetScale;
+        cg.alpha = end;
 
-        if (show)
-        {
-            cg.interactable = true;
-            cg.blocksRaycasts = true;
-        }
-        else
-        {
-            cg.interactable = false;
-            cg.blocksRaycasts = false;
+        bool visible = end > 0.5f;
+        cg.interactable = visible;
+        cg.blocksRaycasts = visible;
 
-            if (deactivateOnHide)
-                go.SetActive(false);
-        }
-    }
-
-    // ================= ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ДЛЯ ТЕКСТА =================
-
-    private string GetHeightCategory(float h)
-    {
-        // здесь можно подогнать пороги под реальные высоты
-        if (h < 0.3f) return "Low";
-        if (h < 0.7f) return "Medium";
-        return "High";
-    }
-
-    private string GetBiomeName(TileTerrainType type)
-    {
-        switch (type)
-        {
-            case TileTerrainType.Grass:    return "Grassland";
-            case TileTerrainType.Forest:   return "Forest";
-            case TileTerrainType.Mountain: return "Mountain";
-            case TileTerrainType.Water:    return "Water";
-            default:                       return type.ToString();
-        }
-    }
-
-    /// <summary>
-    /// Текст для строки о месторождении на тайле.
-    /// </summary>
-    private string GetDepositText(Tile tile)
-    {
-        if (tile == null || !tile.HasResourceDeposit || tile.ResourceDeposit == null)
-            return "None";
-
-        switch (tile.ResourceDeposit.type)
-        {
-            case ResourceType.Gold:
-                return "Gold vein";
-            case ResourceType.Coal:
-                return "Coal vein";
-            default:
-                return "None";
-        }
+        if (!show && deactivateOnHide)
+            cg.gameObject.SetActive(false);
     }
 }
