@@ -27,12 +27,10 @@ public class UnitMovementSystem : MonoBehaviour
         if (playerResources == null) playerResources = FindObjectOfType<PlayerResources>();
     }
 
-    // ✅ чтобы НЕ ломать твою старую схему, оставляем метод, который TileSelector может вызывать
     public void OnTileClicked(Tile tile)
     {
         if (tile == null) return;
 
-        // если на тайле есть юнит — выбираем его
         Unit u = FindUnitOnTile(tile);
         if (u != null)
         {
@@ -40,21 +38,34 @@ public class UnitMovementSystem : MonoBehaviour
             return;
         }
 
-        // если выбран юнит — пытаемся ходить
         if (selectedUnit != null)
         {
-            TryMoveSelectedUnitTo(tile);
+            bool moved = TryMoveSelectedUnitTo(tile);
+
+            // клик вне радиуса/нельзя ходить -> снять выделение
+            if (!moved)
+                ClearSelection();
         }
     }
 
-    // ✅ тоже оставляем публичным — чтобы TileSelector мог чистить
     public void ClearSelection()
     {
         selectedUnit = null;
         ClearMarkers();
     }
 
-    // Если хочешь, можешь оставить “самостоятельные клики” тоже:
+    /// <summary>
+    /// Вызывать при смене выделенного тайла (select/deselect),
+    /// чтобы выбранный юнит не "висел" в воздухе, когда тайл поднялся/опустился.
+    /// </summary>
+    public void OnTileSelectionChanged()
+    {
+        if (selectedUnit == null) return;
+        if (moveRoutine != null) return;
+
+        selectedUnit.SnapToCurrentTile();
+    }
+
     private void Update()
     {
         if (Input.GetMouseButtonDown(0))
@@ -80,7 +91,6 @@ public class UnitMovementSystem : MonoBehaviour
         foreach (var u in all)
             u.ResetMoves();
 
-        // если выбранный юнит был — обновим кружки
         if (selectedUnit != null)
             ShowMoveMarkers(selectedUnit);
     }
@@ -88,47 +98,52 @@ public class UnitMovementSystem : MonoBehaviour
     private void SelectUnit(Unit unit)
     {
         selectedUnit = unit;
+
+        // ✅ на всякий случай сразу выровняем по тайлу
+        selectedUnit.SetMoving(false);
+        selectedUnit.SnapToCurrentTile();
+
         ShowMoveMarkers(unit);
     }
 
-    private void TryMoveSelectedUnitTo(Tile target)
+    private bool TryMoveSelectedUnitTo(Tile target)
     {
-        if (selectedUnit == null || target == null) return;
+        if (selectedUnit == null || target == null) return false;
 
-        // нет ходов
         if (!selectedUnit.HasMoves())
-            return;
+            return false;
 
-        // запрет воды
         if (blockWater && target.TerrainType == TileTerrainType.Water)
-            return;
+            return false;
 
-        // нельзя в тайл, где уже юнит
         if (FindUnitOnTile(target) != null)
-            return;
+            return false;
 
-        // можно ходить ТОЛЬКО в подсвеченные (т.е. в радиус MovePoints)
         if (!IsTileInMoveRange(selectedUnit, target))
-            return;
+            return false;
+
+        int cost = GetChebyshevDistance(selectedUnit.CurrentTile, target);
+        if (cost <= 0) return false;
+
+        if (cost > selectedUnit.MovesLeftThisTurn)
+            return false;
 
         if (moveRoutine != null)
             StopCoroutine(moveRoutine);
 
-        moveRoutine = StartCoroutine(MoveUnitRoutine(selectedUnit, target));
+        moveRoutine = StartCoroutine(MoveUnitRoutine(selectedUnit, target, cost));
+        return true;
     }
 
-    private IEnumerator MoveUnitRoutine(Unit unit, Tile target)
+    private IEnumerator MoveUnitRoutine(Unit unit, Tile target, int cost)
     {
-        // направление (для поворота)
+        unit.SetMoving(true);
+
         Vector3 from = unit.transform.position;
         Vector3 to = unit.GetWorldPositionOnTile(target);
 
         unit.FaceDirection(to - from);
 
-        // снять с прошлого тайла + поставить на новый (флаги)
-        Tile oldTile = unit.CurrentTile;
-
-        // движение плавное
         float t = 0f;
         while (t < 1f)
         {
@@ -140,13 +155,12 @@ public class UnitMovementSystem : MonoBehaviour
 
         unit.transform.position = to;
 
-        // закрепить тайл (и обновить флаги декора)
         unit.SetTile(target, instant: true);
+        unit.SpendMovePoint(cost);
 
-        // списать 1 очко хода
-        unit.SpendMovePoint(1);
+        unit.SetMoving(false);
+        unit.SnapToCurrentTile();
 
-        // обновить кружки
         ShowMoveMarkers(unit);
 
         moveRoutine = null;
@@ -159,14 +173,10 @@ public class UnitMovementSystem : MonoBehaviour
         if (unit == null) return;
         if (!unit.HasMoves()) return;
 
-        int range = unit.MovesLeftThisTurn; // ✅ кружки показываем по оставшимся очкам
-
-        // по твоему требованию: “может ходить по диагонали”
-        // значит используем Chebyshev distance: max(|dx|,|dy|)
+        int range = unit.MovesLeftThisTurn;
         Tile origin = unit.CurrentTile;
         if (origin == null) return;
 
-        // простой способ: пробежаться по квадрату range и отфильтровать
         for (int dx = -range; dx <= range; dx++)
         {
             for (int dy = -range; dy <= range; dy++)
@@ -197,6 +207,14 @@ public class UnitMovementSystem : MonoBehaviour
         return dist > 0 && dist <= unit.MovesLeftThisTurn;
     }
 
+    private int GetChebyshevDistance(Tile a, Tile b)
+    {
+        if (a == null || b == null) return 0;
+        Vector2Int pa = a.GridPosition;
+        Vector2Int pb = b.GridPosition;
+        return Mathf.Max(Mathf.Abs(pa.x - pb.x), Mathf.Abs(pa.y - pb.y));
+    }
+
     private void SpawnMarker(Tile tile)
     {
         if (moveMarkerPrefab == null) return;
@@ -220,8 +238,6 @@ public class UnitMovementSystem : MonoBehaviour
 
     private Tile FindTileAt(Vector2Int gridPos)
     {
-        // Надёжно для текущего масштаба проекта: просто ищем в сцене.
-        // Позже можно заменить на словарь из MapGenerator.
         Tile[] tiles = FindObjectsOfType<Tile>();
         foreach (var t in tiles)
         {

@@ -46,11 +46,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   stats: {fileID: 11400000, guid: 11dda4b30541cd54393b877aaaba6ca0, type: 2}
-  yOffset: 0.08
+  yOffset: -0.05
   modelYawOffset: 90
   modelRoot: {fileID: 945388741762955288}
-  owner: -1
-  currentTile: {fileID: 0}
+  groundRayHeight: 5
+  groundRayLength: 20
 --- !u!1001 &4533041722628660218
 PrefabInstance:
   m_ObjectHideFlags: 0

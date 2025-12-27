@@ -34,6 +34,10 @@ public class TileSelector : MonoBehaviour
             {
                 SelectTile(tile);
 
+                // ✅ если тайл поднялся/опустился — переснапаем выбранного юнита по высоте
+                if (unitMovementSystem != null)
+                    unitMovementSystem.OnTileSelectionChanged();
+
                 // ✅ пробрасываем клик в систему юнитов (чтобы работало как раньше)
                 if (unitMovementSystem != null)
                     unitMovementSystem.OnTileClicked(tile);
@@ -46,7 +50,10 @@ public class TileSelector : MonoBehaviour
         DeselectCurrent();
 
         if (unitMovementSystem != null)
+        {
             unitMovementSystem.ClearSelection();
+            unitMovementSystem.OnTileSelectionChanged();
+        }
     }
 
     void SelectTile(Tile tile)
