@@ -9,6 +9,11 @@ public class UnitMovementSystem : MonoBehaviour
     [SerializeField] private PlayerResources playerResources;
     [SerializeField] private Camera mainCamera;
 
+    [Header("Optional input (TURN OFF if you use TileSelector)")]
+    [Tooltip("Если включено — UnitMovementSystem сам обрабатывает клики мыши. " +
+             "Если у тебя есть TileSelector — оставь false, чтобы не было двойных кликов.")]
+    [SerializeField] private bool handleClicksInternally = false;
+
     [Header("Move markers (circles)")]
     [SerializeField] private GameObject moveMarkerPrefab;
     [SerializeField] private float markerYOffset = 0.05f;
@@ -27,6 +32,7 @@ public class UnitMovementSystem : MonoBehaviour
         if (playerResources == null) playerResources = FindObjectOfType<PlayerResources>();
     }
 
+    // TileSelector вызывает это — оставляем как главный вход
     public void OnTileClicked(Tile tile)
     {
         if (tile == null) return;
@@ -68,6 +74,10 @@ public class UnitMovementSystem : MonoBehaviour
 
     private void Update()
     {
+        // ✅ ВАЖНО: по умолчанию выключено, чтобы НЕ было двойного клика с TileSelector
+        if (!handleClicksInternally)
+            return;
+
         if (Input.GetMouseButtonDown(0))
         {
             if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
@@ -99,7 +109,7 @@ public class UnitMovementSystem : MonoBehaviour
     {
         selectedUnit = unit;
 
-        // ✅ на всякий случай сразу выровняем по тайлу
+        // на всякий случай сразу выровняем по тайлу
         selectedUnit.SetMoving(false);
         selectedUnit.SnapToCurrentTile();
 
@@ -185,6 +195,8 @@ public class UnitMovementSystem : MonoBehaviour
                 if (dist == 0 || dist > range) continue;
 
                 Vector2Int gp = origin.GridPosition + new Vector2Int(dx, dy);
+
+                // ✅ используем registry из Tile вместо FindObjectsOfType()
                 Tile t = FindTileAt(gp);
                 if (t == null) continue;
 
@@ -238,6 +250,11 @@ public class UnitMovementSystem : MonoBehaviour
 
     private Tile FindTileAt(Vector2Int gridPos)
     {
+        // ✅ быстрый путь через registry
+        if (Tile.TryGetTile(gridPos, out Tile tile) && tile != null)
+            return tile;
+
+        // fallback на всякий случай (если где-то Init не вызвали)
         Tile[] tiles = FindObjectsOfType<Tile>();
         foreach (var t in tiles)
         {
@@ -250,6 +267,7 @@ public class UnitMovementSystem : MonoBehaviour
     {
         if (tile == null) return null;
 
+        // Безопасно оставляем текущий способ (пока Unit не гарантирует AssignUnit/ClearUnit)
         Unit[] units = FindObjectsOfType<Unit>();
         foreach (var u in units)
         {
