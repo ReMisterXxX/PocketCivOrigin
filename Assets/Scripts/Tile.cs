@@ -40,7 +40,6 @@ public class Tile : MonoBehaviour
 
     public bool HasUnit { get; private set; }
     public bool HasBuilding { get; private set; }
-
     public bool HasCity { get; private set; }
 
     public float TopHeight { get; private set; }
@@ -126,14 +125,39 @@ public class Tile : MonoBehaviour
         SetBuildingPresent(hasCity);
     }
 
+    /// <summary>
+    /// ВАЖНО:
+    /// - обычный декор (трава/деревья/камни) можно выключать GameObject'ом
+    /// - но месторождение (ResourceDeposit) НЕЛЬЗЯ выключать, иначе оно уйдёт из ResourceDeposit.All и доход пропадёт
+    ///   поэтому для депозитов мы просто прячем Renderer'ы при необходимости
+    /// </summary>
     private void UpdateDecorationVisibility()
     {
         bool shouldHide = HasUnit || HasBuilding;
 
         foreach (var deco in Decorations)
         {
-            if (deco != null)
-                deco.SetActive(!shouldHide);
+            if (deco == null) continue;
+
+            // депозит? НЕ выключаем объект, только рендер
+            if (deco.GetComponent<ResourceDeposit>() != null || deco.GetComponentInChildren<ResourceDeposit>() != null)
+            {
+                var renderers = deco.GetComponentsInChildren<Renderer>(includeInactive: true);
+                for (int i = 0; i < renderers.Length; i++)
+                {
+                    if (renderers[i] != null)
+                        renderers[i].enabled = !shouldHide;
+                }
+
+                // сам GO всегда активен, чтобы депозит оставался в ResourceDeposit.All
+                if (!deco.activeSelf)
+                    deco.SetActive(true);
+
+                continue;
+            }
+
+            // обычный декор можно выключать полностью
+            deco.SetActive(!shouldHide);
         }
     }
 

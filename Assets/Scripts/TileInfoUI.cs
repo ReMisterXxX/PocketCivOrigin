@@ -26,6 +26,10 @@ public class TileInfoUI : MonoBehaviour
     [Header("City Recruit Panel (optional)")]
     public CityRecruitPanelUI cityRecruitPanelUI;
 
+    // ✅ НОВОЕ: BuildMenuUI
+    [Header("Build Menu (optional)")]
+    public BuildMenuUI buildMenuUI;
+
     private Tile currentTile;
 
     private CanvasGroup mainCg;
@@ -41,8 +45,6 @@ public class TileInfoUI : MonoBehaviour
         mainCg = GetOrAddCanvasGroup(panel);
         detailsCg = GetOrAddCanvasGroup(detailsPanel);
 
-        // ВАЖНО: основная панель может не деактивироваться (как у тебя было),
-        // но становиться невидимой/некликабельной — это ок.
         HideInstant(mainCg, deactivateGameObject: false);
         HideInstant(detailsCg, deactivateGameObject: true);
 
@@ -89,7 +91,6 @@ public class TileInfoUI : MonoBehaviour
             detailsAnimCoroutine = StartCoroutine(AnimatePanel(detailsCg, show: false, deactivateOnHide: true));
         }
 
-        // Если панель найма не создана/не назначена — ничего не будет.
         if (cityRecruitPanelUI != null)
             cityRecruitPanelUI.ShowForTile(currentTile);
     }
@@ -111,7 +112,15 @@ public class TileInfoUI : MonoBehaviour
     private void OnBuildClicked()
     {
         if (currentTile == null) return;
-        Debug.Log($"[BUILD] (reserved) Build menu for tile {currentTile.GridPosition}");
+
+        // ✅ Открываем BuildMenu (если он назначен)
+        if (buildMenuUI != null)
+        {
+            buildMenuUI.ShowForTile(currentTile);
+            return;
+        }
+
+        Debug.Log($"[BUILD] BuildMenuUI not assigned. Tile {currentTile.GridPosition}");
     }
 
     private void OnMainCloseClicked()
@@ -128,9 +137,12 @@ public class TileInfoUI : MonoBehaviour
             detailsAnimCoroutine = StartCoroutine(AnimatePanel(detailsCg, show: false, deactivateOnHide: true));
         }
 
-        // закрываем панель найма (если она есть)
         if (cityRecruitPanelUI != null)
             cityRecruitPanelUI.HideAll();
+
+        // ✅ закрываем build menu тоже
+        if (buildMenuUI != null)
+            buildMenuUI.Hide();
     }
 
     private void OnDetailsCloseClicked()
