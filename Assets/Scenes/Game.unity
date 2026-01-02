@@ -5897,16 +5897,12 @@ MonoBehaviour:
   turnText: {fileID: 839018996}
   goldGroup: {fileID: 0}
   coalGroup: {fileID: 0}
-  turnLabel: {fileID: 0}
+  turnGroup: {fileID: 0}
+  animateCount: 1
   countDuration: 0.25
+  pulseOnChange: 1
   pulseScale: 1.2
   pulseDuration: 0.15
-  pulseIncomeOnChange: 1
-  incomePulseScale: 1.15
-  incomePulseDuration: 0.12
-  pulseTurnOnChange: 1
-  turnPulseScale: 1.12
-  turnPulseDuration: 0.12
 --- !u!4 &1783588503
 Transform:
   m_ObjectHideFlags: 0
@@ -5958,6 +5954,7 @@ MonoBehaviour:
   playerResources: {fileID: 1846007008}
   topPanelUI: {fileID: 1783588502}
   unitMovementSystem: {fileID: 1846007010}
+  nextTurnButton: {fileID: 0}
   goldPopupColor: {r: 1, g: 0.85, b: 0.15, a: 1}
   coalPopupColor: {r: 0.2754717, g: 0.2754717, b: 0.2754717, a: 1}
   currentTurn: 0
@@ -6043,6 +6040,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   playerResources: {fileID: 1846007008}
+  unitMovementSystem: {fileID: 0}
   cityPrefab: {fileID: 2058571922317989368, guid: 630a07f741ac70d4b8f9eb120f00e3c0, type: 3}
   goldMinePrefab: {fileID: 5297161373253871638, guid: b32b0be7e039fef4d94f0cfcf355e8fe, type: 3}
   coalMinePrefab: {fileID: 6701029665601113671, guid: 42405f748e8cfcd44bdd6105d12cc03e, type: 3}

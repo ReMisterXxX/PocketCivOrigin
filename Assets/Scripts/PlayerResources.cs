@@ -23,7 +23,6 @@ public class PlayerResources : MonoBehaviour
 
     public int Gold => gold;
     public int Coal => coal;
-
     public int GoldIncome => goldIncome;
     public int CoalIncome => coalIncome;
 
@@ -34,17 +33,13 @@ public class PlayerResources : MonoBehaviour
         gold = startGold;
         coal = startCoal;
 
-        RecalculateIncome();
-        RaiseChanged();
+        RecalculateIncome(); // внутри будет RaiseChanged()
     }
 
     /// <summary>
     /// Пересчитать доход:
-    /// - +5 за каждую обычную жилу
-    /// - +7 за горную жилу
-    /// - с шахтой: обычная 7, горная 10
-    /// Всё это уже зашито в ResourceDeposit.GetIncomePerTurn().
-    /// Считаем только депозиты на тайлах текущего игрока (tile.Owner == currentPlayer).
+    /// - доход даёт ResourceDeposit.GetIncomePerTurn()
+    /// - считаем только депозиты на тайлах текущего игрока (tile.Owner == currentPlayer)
     /// </summary>
     public void RecalculateIncome()
     {
@@ -61,7 +56,6 @@ public class PlayerResources : MonoBehaviour
             Tile tile = d.Tile;
             if (tile == null) continue;
 
-            // Считаем только доход с тайлов текущего игрока
             if (tile.Owner != currentPlayer)
                 continue;
 
@@ -71,7 +65,6 @@ public class PlayerResources : MonoBehaviour
             else if (d.type == ResourceType.Coal) c += income;
         }
 
-        // Fallback нужен ТОЛЬКО если в сцене вообще нет депозитов (тестовая/пустая сцена)
         if (!anyDepositExists)
         {
             g = fallbackGoldIncome;
@@ -80,11 +73,11 @@ public class PlayerResources : MonoBehaviour
 
         goldIncome = g;
         coalIncome = c;
+
+        // ✅ ВАЖНО: чтобы UI сразу увидел изменение дохода после постройки/захвата
+        RaiseChanged();
     }
 
-    /// <summary>
-    /// Начислить доход за ход.
-    /// </summary>
     public void ApplyTurnIncome()
     {
         gold += goldIncome;

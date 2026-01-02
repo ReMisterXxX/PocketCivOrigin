@@ -5,6 +5,7 @@ public class BuildSystem : MonoBehaviour
 {
     [Header("Refs")]
     [SerializeField] private PlayerResources playerResources;
+    [SerializeField] private UnitMovementSystem unitMovementSystem;
 
     [Header("Prefabs")]
     [SerializeField] private GameObject cityPrefab;
@@ -30,6 +31,9 @@ public class BuildSystem : MonoBehaviour
     {
         if (playerResources == null)
             playerResources = FindObjectOfType<PlayerResources>();
+
+        if (unitMovementSystem == null)
+            unitMovementSystem = FindObjectOfType<UnitMovementSystem>();
     }
 
     // =========================
@@ -40,6 +44,21 @@ public class BuildSystem : MonoBehaviour
     {
         reason = "";
         if (tile == null) { reason = "No tile."; return false; }
+
+        // ✅ город только если на тайле есть юнит
+        Unit unit = FindUnitOnTile(tile);
+        if (unit == null)
+        {
+            reason = "You need a unit on this tile to found a city.";
+            return false;
+        }
+
+        // ✅ только юнит текущего игрока (мягкая проверка — не ломает если owner у юнита нет)
+        if (!IsUnitOwnedByCurrentPlayer(unit))
+        {
+            reason = "Only your unit can found a city.";
+            return false;
+        }
 
         // нельзя строить на территории кого-либо (своей/вражеской)
         if (tile.Owner != PlayerId.None)
@@ -74,19 +93,42 @@ public class BuildSystem : MonoBehaviour
         if (!CanBuildCity(tile, out reason))
             return false;
 
+        // ✅ Сначала тратим ресурсы
         if (playerResources != null && !playerResources.TrySpend(cityGoldCost, cityCoalCost))
         {
             reason = "Can't spend resources.";
             return false;
         }
 
+        // ✅ форсим обновление UI (не меняя ресурсы)
+        if (playerResources != null)
+        {
+            playerResources.AddGold(0);
+            playerResources.AddCoal(0);
+        }
+
+        // ✅ убираем кружки/выделение юнита до уничтожения, чтобы не остались следы
+        if (unitMovementSystem != null)
+            unitMovementSystem.ClearSelection();
+
         PlayerId p = playerResources != null ? playerResources.CurrentPlayer : PlayerId.Player1;
 
-        // базовый цвет игрока
+        // базовый цвет игрока + альфа тайла
         Color col = PlayerColorManager.GetColor(p);
-
-        // ✅ приводим alpha к тайловому (чтобы выглядело как стартовый город)
         col.a = tile != null ? tile.territoryAlpha : 0.55f;
+
+        // ✅ убираем (уничтожаем) юнита-основателя
+        Unit founder = FindUnitOnTile(tile);
+        if (founder != null)
+        {
+            // 1) снять с тайла “по новой системе”
+            try { tile.AssignUnit(null); } catch { }
+
+            // 2) снять флаг “по старой системе”
+            try { tile.OnUnitLeave(); } catch { }
+
+            Destroy(founder.gameObject);
+        }
 
         // 1) ставим город
         if (cityPrefab != null)
@@ -105,6 +147,13 @@ public class BuildSystem : MonoBehaviour
         // 4) пересчёт дохода
         if (playerResources != null)
             playerResources.RecalculateIncome();
+
+        // ✅ форсим апдейт доходов на UI (без изменения значений)
+        if (playerResources != null)
+        {
+            playerResources.AddGold(0);
+            playerResources.AddCoal(0);
+        }
 
         reason = "";
         return true;
@@ -160,6 +209,13 @@ public class BuildSystem : MonoBehaviour
             return false;
         }
 
+        // ✅ форс UI обновления
+        if (playerResources != null)
+        {
+            playerResources.AddGold(0);
+            playerResources.AddCoal(0);
+        }
+
         GameObject prefab = null;
         if (tile.ResourceDeposit.type == ResourceType.Gold) prefab = goldMinePrefab;
         if (tile.ResourceDeposit.type == ResourceType.Coal) prefab = coalMinePrefab;
@@ -176,13 +232,17 @@ public class BuildSystem : MonoBehaviour
         spawnedBuildings[tile] = mine;
 
         tile.SetBuildingPresent(true);
-
-        // ✅ депозит НЕ должен отключаться (Tile.cs теперь это гарантирует),
-        // а доход должен вырасти
         tile.ResourceDeposit.SetMineBuilt(true);
 
         if (playerResources != null)
             playerResources.RecalculateIncome();
+
+        // ✅ форс UI доходов
+        if (playerResources != null)
+        {
+            playerResources.AddGold(0);
+            playerResources.AddCoal(0);
+        }
 
         reason = "";
         return true;
@@ -203,7 +263,6 @@ public class BuildSystem : MonoBehaviour
     {
         if (center == null) return;
 
-        // центр тоже захватываем
         if (center.Owner == PlayerId.None)
         {
             center.SetOwner(owner);
@@ -230,11 +289,64 @@ public class BuildSystem : MonoBehaviour
 
                 t.SetOwner(owner);
 
-                // ✅ гарантируем одинаковую прозрачность на всех тайлах
                 Color c = colorWithAlpha;
                 c.a = t.territoryAlpha;
                 t.SetTerritoryColor(c);
             }
         }
+    }
+
+    // ===== Unit helpers =====
+
+    private Unit FindUnitOnTile(Tile tile)
+    {
+        if (tile == null) return null;
+
+        if (tile.UnitOnTile != null) return tile.UnitOnTile;
+
+        Unit[] units = FindObjectsOfType<Unit>();
+        foreach (var u in units)
+        {
+            if (u != null && u.CurrentTile == tile)
+                return u;
+        }
+
+        return null;
+    }
+
+    private bool IsUnitOwnedByCurrentPlayer(Unit unit)
+    {
+        if (unit == null) return false;
+        if (playerResources == null) return true;
+
+        PlayerId current = playerResources.CurrentPlayer;
+
+        var t = unit.GetType();
+
+        var f = t.GetField("owner");
+        if (f != null && f.FieldType == typeof(PlayerId))
+            return ((PlayerId)f.GetValue(unit)) == current;
+
+        f = t.GetField("Owner");
+        if (f != null && f.FieldType == typeof(PlayerId))
+            return ((PlayerId)f.GetValue(unit)) == current;
+
+        f = t.GetField("playerId");
+        if (f != null && f.FieldType == typeof(PlayerId))
+            return ((PlayerId)f.GetValue(unit)) == current;
+
+        f = t.GetField("PlayerId");
+        if (f != null && f.FieldType == typeof(PlayerId))
+            return ((PlayerId)f.GetValue(unit)) == current;
+
+        var p = t.GetProperty("Owner");
+        if (p != null && p.PropertyType == typeof(PlayerId))
+            return ((PlayerId)p.GetValue(unit)) == current;
+
+        p = t.GetProperty("PlayerId");
+        if (p != null && p.PropertyType == typeof(PlayerId))
+            return ((PlayerId)p.GetValue(unit)) == current;
+
+        return true;
     }
 }

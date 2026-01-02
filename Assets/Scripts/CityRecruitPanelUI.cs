@@ -42,14 +42,10 @@ public class CityRecruitPanelUI : MonoBehaviour
 
     private void Awake()
     {
-        if (cityPanelRoot == null)
-            cityPanelRoot = gameObject;
+        if (cityPanelRoot == null) cityPanelRoot = gameObject;
 
-        if (playerResources == null)
-            playerResources = FindObjectOfType<PlayerResources>();
-
-        if (topPanelUI == null)
-            topPanelUI = FindObjectOfType<ResourceTopPanelUI>();
+        if (playerResources == null) playerResources = FindObjectOfType<PlayerResources>();
+        if (topPanelUI == null) topPanelUI = FindObjectOfType<ResourceTopPanelUI>();
 
         cityCg = GetOrAddCanvasGroup(cityPanelRoot);
         listCg = GetOrAddCanvasGroup(unitListRoot);
@@ -138,7 +134,6 @@ public class CityRecruitPanelUI : MonoBehaviour
             return;
         }
 
-        // ✅ FIX: owner -> currentPlayer
         if (currentTile.Owner != playerResources.currentPlayer)
         {
             Debug.Log("[Recruit] Can't recruit in чужом городе.");
@@ -151,9 +146,9 @@ public class CityRecruitPanelUI : MonoBehaviour
             return;
         }
 
-        // на всякий: доход мог меняться — пересчитаем и обновим UI
+        // ✅ сразу пересчитать и обновить верхнюю панель
         playerResources.RecalculateIncome();
-        topPanelUI?.UpdateAll(playerResources);
+        if (topPanelUI != null) topPanelUI.UpdateAll(playerResources);
 
         if (basicUnitPrefab == null)
         {
@@ -173,10 +168,7 @@ public class CityRecruitPanelUI : MonoBehaviour
         Unit unit = go.GetComponent<Unit>();
         if (unit == null) unit = go.AddComponent<Unit>();
 
-        // ✅ FIX: owner -> currentPlayer
         unit.Initialize(playerResources.currentPlayer, currentTile);
-
-        // ✅ КЛЮЧЕВОЕ: записываем юнита в тайл, чтобы система движения его видела
         currentTile.AssignUnit(unit);
 
         ShowCityPanel();
@@ -211,23 +203,18 @@ public class CityRecruitPanelUI : MonoBehaviour
         float start = cg.alpha;
         float end = show ? 1f : 0f;
 
-        cg.interactable = false;
-        cg.blocksRaycasts = false;
-
         float t = 0f;
         while (t < animDuration)
         {
-            t += Time.deltaTime / animDuration;
-            float k = Mathf.Clamp01(t);
+            t += Time.unscaledDeltaTime;
+            float k = Mathf.Clamp01(t / Mathf.Max(0.0001f, animDuration));
             cg.alpha = Mathf.Lerp(start, end, k);
             yield return null;
         }
 
         cg.alpha = end;
-
-        bool visible = end > 0.5f;
-        cg.interactable = visible;
-        cg.blocksRaycasts = visible;
+        cg.interactable = show;
+        cg.blocksRaycasts = show;
 
         if (!show && deactivateOnHide)
             cg.gameObject.SetActive(false);
