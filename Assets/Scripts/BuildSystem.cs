@@ -36,10 +36,6 @@ public class BuildSystem : MonoBehaviour
             unitMovementSystem = FindObjectOfType<UnitMovementSystem>();
     }
 
-    // =========================
-    // Public API
-    // =========================
-
     public bool CanBuildCity(Tile tile, out string reason)
     {
         reason = "";
@@ -60,13 +56,14 @@ public class BuildSystem : MonoBehaviour
             return false;
         }
 
-        // нельзя строить на территории кого-либо (своей/вражеской)
+        // нельзя на чужой/своей территории
         if (tile.Owner != PlayerId.None)
         {
             reason = "Tile already belongs to a territory.";
             return false;
         }
 
+        // нельзя на тайл, где уже есть город/здание
         if (tile.HasCity || tile.HasBuilding)
         {
             reason = "Tile already has a building.";
@@ -107,7 +104,7 @@ public class BuildSystem : MonoBehaviour
             playerResources.AddCoal(0);
         }
 
-        // ✅ убираем кружки/выделение юнита до уничтожения, чтобы не остались следы
+        // ✅ чистим выбор (на всякий)
         if (unitMovementSystem != null)
             unitMovementSystem.ClearSelection();
 
@@ -122,7 +119,7 @@ public class BuildSystem : MonoBehaviour
         if (founder != null)
         {
             // 1) снять с тайла “по новой системе”
-            try { tile.AssignUnit(null); } catch { }
+            try { tile.ClearUnit(founder); } catch { }
 
             // 2) снять флаг “по старой системе”
             try { tile.OnUnitLeave(); } catch { }
@@ -164,28 +161,27 @@ public class BuildSystem : MonoBehaviour
         reason = "";
         if (tile == null) { reason = "No tile."; return false; }
 
-        PlayerId p = playerResources != null ? playerResources.CurrentPlayer : PlayerId.Player1;
-        if (tile.Owner != p)
+        if (tile.Owner == PlayerId.None)
         {
-            reason = "Mine can be built only on your territory.";
+            reason = "Mine must be built on captured territory.";
             return false;
         }
 
-        if (!tile.HasResourceDeposit || tile.ResourceDeposit == null)
+        if (playerResources != null && tile.Owner != playerResources.CurrentPlayer)
         {
-            reason = "No deposit here.";
+            reason = "You can build only on your territory.";
             return false;
         }
 
-        if (tile.HasBuilding || tile.HasCity)
+        if (tile.HasCity || tile.HasBuilding)
         {
             reason = "Tile already has a building.";
             return false;
         }
 
-        if (tile.ResourceDeposit.HasMine)
+        if (!tile.HasResourceDeposit || tile.ResourceDeposit == null)
         {
-            reason = "Mine already built.";
+            reason = "Mine can be built only on a resource deposit.";
             return false;
         }
 
@@ -209,35 +205,42 @@ public class BuildSystem : MonoBehaviour
             return false;
         }
 
-        // ✅ форс UI обновления
+        // ✅ форсим обновление UI (не меняя ресурсы)
         if (playerResources != null)
         {
             playerResources.AddGold(0);
             playerResources.AddCoal(0);
         }
 
+        var dep = tile.ResourceDeposit;
+        if (dep == null)
+        {
+            reason = "No deposit.";
+            return false;
+        }
+
         GameObject prefab = null;
-        if (tile.ResourceDeposit.type == ResourceType.Gold) prefab = goldMinePrefab;
-        if (tile.ResourceDeposit.type == ResourceType.Coal) prefab = coalMinePrefab;
+        if (dep.type == ResourceType.Gold) prefab = goldMinePrefab;
+        if (dep.type == ResourceType.Coal) prefab = coalMinePrefab;
 
         if (prefab == null)
         {
-            reason = "Mine prefab not set.";
+            reason = "Mine prefab not assigned for this deposit type.";
             return false;
         }
 
         Vector3 pos = GetBuildWorldPos(tile);
-
         GameObject mine = Instantiate(prefab, pos, Quaternion.identity, tile.transform);
         spawnedBuildings[tile] = mine;
 
         tile.SetBuildingPresent(true);
+
         tile.ResourceDeposit.SetMineBuilt(true);
 
         if (playerResources != null)
             playerResources.RecalculateIncome();
 
-        // ✅ форс UI доходов
+        // ✅ форсим апдейт доходов на UI
         if (playerResources != null)
         {
             playerResources.AddGold(0);
@@ -248,55 +251,12 @@ public class BuildSystem : MonoBehaviour
         return true;
     }
 
-    // =========================
-    // Internal
-    // =========================
-
     private Vector3 GetBuildWorldPos(Tile tile)
     {
-        Vector3 p = tile.transform.position;
-        p.y = tile.TopHeight + buildingYOffset;
-        return p;
+        Vector3 anchor = tile.transform.position;
+        anchor.y = tile.TopHeight + buildingYOffset;
+        return anchor;
     }
-
-    private void CaptureTerritory(Tile center, PlayerId owner, Color colorWithAlpha)
-    {
-        if (center == null) return;
-
-        if (center.Owner == PlayerId.None)
-        {
-            center.SetOwner(owner);
-            center.SetTerritoryColor(colorWithAlpha);
-        }
-
-        Vector2Int o = center.GridPosition;
-
-        for (int dx = -cityCaptureRadius; dx <= cityCaptureRadius; dx++)
-        {
-            for (int dy = -cityCaptureRadius; dy <= cityCaptureRadius; dy++)
-            {
-                int dist = Mathf.Max(Mathf.Abs(dx), Mathf.Abs(dy));
-                if (dist == 0 || dist > cityCaptureRadius) continue;
-
-                Vector2Int gp = o + new Vector2Int(dx, dy);
-
-                if (!Tile.TryGetTile(gp, out Tile t) || t == null)
-                    continue;
-
-                // "обтекание": не трогаем уже занятую территорию
-                if (t.Owner != PlayerId.None)
-                    continue;
-
-                t.SetOwner(owner);
-
-                Color c = colorWithAlpha;
-                c.a = t.territoryAlpha;
-                t.SetTerritoryColor(c);
-            }
-        }
-    }
-
-    // ===== Unit helpers =====
 
     private Unit FindUnitOnTile(Tile tile)
     {
@@ -323,30 +283,57 @@ public class BuildSystem : MonoBehaviour
 
         var t = unit.GetType();
 
-        var f = t.GetField("owner");
-        if (f != null && f.FieldType == typeof(PlayerId))
-            return ((PlayerId)f.GetValue(unit)) == current;
+        // пытаемся найти поле/свойство Owner (мягко, чтобы не ломать)
+        var prop = t.GetProperty("Owner");
+        if (prop != null && prop.PropertyType == typeof(PlayerId))
+        {
+            PlayerId val = (PlayerId)prop.GetValue(unit);
+            return val.Equals(current);
+        }
 
-        f = t.GetField("Owner");
-        if (f != null && f.FieldType == typeof(PlayerId))
-            return ((PlayerId)f.GetValue(unit)) == current;
+        var field = t.GetField("owner", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic);
+        if (field != null && field.FieldType == typeof(PlayerId))
+        {
+            PlayerId val = (PlayerId)field.GetValue(unit);
+            return val.Equals(current);
+        }
 
-        f = t.GetField("playerId");
-        if (f != null && f.FieldType == typeof(PlayerId))
-            return ((PlayerId)f.GetValue(unit)) == current;
-
-        f = t.GetField("PlayerId");
-        if (f != null && f.FieldType == typeof(PlayerId))
-            return ((PlayerId)f.GetValue(unit)) == current;
-
-        var p = t.GetProperty("Owner");
-        if (p != null && p.PropertyType == typeof(PlayerId))
-            return ((PlayerId)p.GetValue(unit)) == current;
-
-        p = t.GetProperty("PlayerId");
-        if (p != null && p.PropertyType == typeof(PlayerId))
-            return ((PlayerId)p.GetValue(unit)) == current;
-
+        // если owner не найден — считаем что свой (чтобы не сломать игру)
         return true;
+    }
+
+    private void CaptureTerritory(Tile center, PlayerId owner, Color color)
+    {
+        if (center == null) return;
+
+        float a = center.territoryAlpha;
+        Color colorWithAlpha = color;
+        colorWithAlpha.a = a;
+
+        Vector2Int c = center.GridPosition;
+
+        for (int dx = -cityCaptureRadius; dx <= cityCaptureRadius; dx++)
+        {
+            for (int dy = -cityCaptureRadius; dy <= cityCaptureRadius; dy++)
+            {
+                int dist = Mathf.Max(Mathf.Abs(dx), Mathf.Abs(dy));
+                if (dist > cityCaptureRadius) continue;
+
+                Vector2Int gp = c + new Vector2Int(dx, dy);
+
+                if (!Tile.TryGetTile(gp, out Tile t) || t == null) continue;
+
+                if (t.TerrainType == TileTerrainType.Water) continue;
+
+                // обтекание — не трогаем уже занятую территорию
+                if (t.Owner != PlayerId.None) continue;
+
+                t.SetOwner(owner);
+
+                Color cc = colorWithAlpha;
+                cc.a = t.territoryAlpha;
+                t.SetTerritoryColor(cc);
+            }
+        }
     }
 }

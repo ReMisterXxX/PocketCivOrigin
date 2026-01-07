@@ -5026,7 +5026,7 @@ MonoBehaviour:
   backButton: {fileID: 1161808472}
   playerResources: {fileID: 1846007008}
   topPanelUI: {fileID: 1783588502}
-  basicUnitPrefab: {fileID: 8429651975543871707, guid: b3c0a4911a51ece41acf5a3e5c966d0d, type: 3}
+  basicUnitPrefab: {fileID: 3463652849150256005, guid: 30cbf00d69bdba045b59d8156ceee024, type: 3}
   unitSpawnOffset: {x: 0, y: 0.28, z: -0.3}
   unitSpawnEuler: {x: 0, y: 0, z: 0}
   basicUnitGoldCost: 15
@@ -5954,7 +5954,7 @@ MonoBehaviour:
   playerResources: {fileID: 1846007008}
   topPanelUI: {fileID: 1783588502}
   unitMovementSystem: {fileID: 1846007010}
-  nextTurnButton: {fileID: 0}
+  nextTurnButton: {fileID: 1169279311}
   goldPopupColor: {r: 1, g: 0.85, b: 0.15, a: 1}
   coalPopupColor: {r: 0.2754717, g: 0.2754717, b: 0.2754717, a: 1}
   currentTurn: 0
@@ -6040,7 +6040,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   playerResources: {fileID: 1846007008}
-  unitMovementSystem: {fileID: 0}
+  unitMovementSystem: {fileID: 1846007010}
   cityPrefab: {fileID: 2058571922317989368, guid: 630a07f741ac70d4b8f9eb120f00e3c0, type: 3}
   goldMinePrefab: {fileID: 5297161373253871638, guid: b32b0be7e039fef4d94f0cfcf355e8fe, type: 3}
   coalMinePrefab: {fileID: 6701029665601113671, guid: 42405f748e8cfcd44bdd6105d12cc03e, type: 3}

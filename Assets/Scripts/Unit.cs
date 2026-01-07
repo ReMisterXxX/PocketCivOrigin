@@ -25,10 +25,8 @@ public class Unit : MonoBehaviour
     private Tile currentTile;
     private int movesLeftThisTurn;
 
-    // чтобы LateUpdate не мешал корутине движения
     private bool isMoving;
 
-    // буфер для RaycastNonAlloc (без аллокаций)
     private readonly RaycastHit[] hitBuffer = new RaycastHit[16];
 
     public PlayerId Owner => owner;
@@ -64,32 +62,40 @@ public class Unit : MonoBehaviour
         isMoving = value;
     }
 
-    // ✅ ВОТ ЭТОГО НЕ ХВАТАЛО (его вызывает UnitMovementSystem)
     public void SnapToCurrentTile()
     {
         if (currentTile == null) return;
         transform.position = GetWorldPositionOnTile(currentTile);
     }
 
+    // ✅ ВАЖНО: тут фиксим консистентность UnitOnTile/HasUnit
     public void SetTile(Tile tile, bool instant)
     {
+        // Снимаем себя с предыдущего тайла
         if (currentTile != null)
+        {
+            // Новая система (реальная ссылка UnitOnTile)
+            currentTile.ClearUnit(this);
+
+            // Старая система (флаг HasUnit) — оставляем для совместимости
             currentTile.OnUnitLeave();
+        }
 
         currentTile = tile;
 
-        if (currentTile != null)
-            currentTile.OnUnitEnter();
-
+        // Назначаем себя на новый тайл
         if (currentTile != null)
         {
+            // Новая система (UnitOnTile + HasUnit)
+            currentTile.AssignUnit(this);
+
+            // Старая система — для совместимости
+            currentTile.OnUnitEnter();
+
             transform.position = GetWorldPositionOnTile(currentTile);
         }
     }
 
-    /// <summary>
-    /// Мировая позиция на тайле: XZ = центр тайла, Y = поверхность тайла (raycast) + yOffset.
-    /// </summary>
     public Vector3 GetWorldPositionOnTile(Tile tile)
     {
         if (tile == null) return transform.position;
@@ -109,59 +115,45 @@ public class Unit : MonoBehaviour
         Ray ray = new Ray(origin, Vector3.down);
 
         int hitCount = Physics.RaycastNonAlloc(ray, hitBuffer, groundRayLength);
-        if (hitCount <= 0)
-        {
-            // fallback
-            return tile.TopHeight;
-        }
 
-        float bestY = float.NegativeInfinity;
-        bool found = false;
+        float bestY = tile.transform.position.y + tile.TopHeight;
+        float bestDist = float.MaxValue;
 
         for (int i = 0; i < hitCount; i++)
         {
-            Collider col = hitBuffer[i].collider;
-            if (col == null) continue;
+            var h = hitBuffer[i];
+            if (h.collider == null) continue;
 
-            // только коллайдеры этого тайла (не деревья/камни)
-            Tile hitTile = col.GetComponentInParent<Tile>();
-            if (hitTile != tile) continue;
-
-            float y = hitBuffer[i].point.y;
-            if (!found || y > bestY)
+            // берём ближайшее попадание
+            if (h.distance < bestDist)
             {
-                bestY = y;
-                found = true;
+                bestDist = h.distance;
+                bestY = h.point.y;
             }
         }
 
-        if (found)
-            return bestY;
+        return bestY;
+    }
 
-        return tile.TopHeight;
+    public void FaceDirection(Vector3 dir)
+    {
+        dir.y = 0f;
+        if (dir.sqrMagnitude < 0.0001f) return;
+
+        Quaternion look = Quaternion.LookRotation(dir.normalized, Vector3.up);
+
+        if (modelRoot != null)
+            modelRoot.rotation = look * Quaternion.Euler(0f, modelYawOffset, 0f);
+        else
+            transform.rotation = look * Quaternion.Euler(0f, modelYawOffset, 0f);
     }
 
     private void LateUpdate()
     {
-        // ✅ пока не двигаемся — всегда "липнем" к текущей поверхности тайла
         if (isMoving) return;
         if (currentTile == null) return;
 
+        // держим на поверхности тайла
         transform.position = GetWorldPositionOnTile(currentTile);
-    }
-
-    public void FaceDirection(Vector3 worldDir)
-    {
-        if (worldDir.sqrMagnitude < 0.0001f) return;
-
-        Vector3 flat = new Vector3(worldDir.x, 0f, worldDir.z).normalized;
-
-        Quaternion look = Quaternion.LookRotation(flat, Vector3.up);
-        Quaternion yawFix = Quaternion.Euler(0f, modelYawOffset, 0f);
-
-        if (modelRoot != null)
-            modelRoot.rotation = look * yawFix;
-        else
-            transform.rotation = look * yawFix;
     }
 }
