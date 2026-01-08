@@ -2,11 +2,34 @@ using UnityEngine;
 
 public class MoveMarker : MonoBehaviour
 {
-    public Tile TargetTile { get; private set; }
+    [SerializeField] private float rotationSpeed = 90f;
 
-    public void Init(Tile tile)
+    private Renderer[] cachedRenderers;
+    private MaterialPropertyBlock mpb;
+
+    private void Awake()
     {
-        TargetTile = tile;
-        gameObject.name = $"MoveMarker_{tile.GridPosition.x}_{tile.GridPosition.y}";
+        cachedRenderers = GetComponentsInChildren<Renderer>(true);
+        mpb = new MaterialPropertyBlock();
+    }
+
+    private void Update()
+    {
+        transform.Rotate(Vector3.up, rotationSpeed * Time.deltaTime);
+    }
+
+    public void SetColor(Color c)
+    {
+        if (cachedRenderers == null || cachedRenderers.Length == 0) return;
+
+        foreach (var r in cachedRenderers)
+        {
+            if (r == null) continue;
+
+            r.GetPropertyBlock(mpb);
+            // большинство шейдеров понимают _Color
+            mpb.SetColor("_Color", c);
+            r.SetPropertyBlock(mpb);
+        }
     }
 }

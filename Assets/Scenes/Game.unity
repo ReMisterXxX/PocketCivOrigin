@@ -6008,7 +6008,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   playerResources: {fileID: 1846007008}
   mainCamera: {fileID: 963194227}
-  handleClicksInternally: 0
+  combatSystem: {fileID: 0}
   moveMarkerPrefab: {fileID: 7629812530992379075, guid: a3b77de1c3aa0d24f8f1e232d570d3b0, type: 3}
   markerYOffset: 0.05
   moveDuration: 0.12

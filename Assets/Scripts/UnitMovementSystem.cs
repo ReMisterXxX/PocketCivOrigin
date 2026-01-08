@@ -8,11 +8,7 @@ public class UnitMovementSystem : MonoBehaviour
     [Header("Refs")]
     [SerializeField] private PlayerResources playerResources;
     [SerializeField] private Camera mainCamera;
-
-    [Header("Optional input (TURN OFF if you use TileSelector)")]
-    [Tooltip("Если включено — UnitMovementSystem сам обрабатывает клики мыши. " +
-             "Если у тебя есть TileSelector — оставь false, чтобы не было двойных кликов.")]
-    [SerializeField] private bool handleClicksInternally = false;
+    [SerializeField] private UnitCombatSystem combatSystem;
 
     [Header("Move markers (circles)")]
     [SerializeField] private GameObject moveMarkerPrefab;
@@ -30,20 +26,37 @@ public class UnitMovementSystem : MonoBehaviour
     {
         if (mainCamera == null) mainCamera = Camera.main;
         if (playerResources == null) playerResources = FindObjectOfType<PlayerResources>();
+        if (combatSystem == null) combatSystem = FindObjectOfType<UnitCombatSystem>();
     }
 
-    // TileSelector вызывает это — оставляем как главный вход
     public void OnTileClicked(Tile tile)
     {
         if (tile == null) return;
 
-        Unit u = FindUnitOnTile(tile);
-        if (u != null)
+        Unit clickedUnit = FindUnitOnTile(tile);
+
+        // 1) если кликнули по юниту
+        if (clickedUnit != null)
         {
-            SelectUnit(u);
+            // 1a) если уже выбран юнит и клик по ВРАГУ рядом -> атака
+            if (selectedUnit != null && clickedUnit != selectedUnit)
+            {
+                bool attacked = TryAttackSelectedUnit(clickedUnit);
+
+                // если атаковали — обновим кружки (скорее всего пропадут, потому что moves=0)
+                if (attacked)
+                {
+                    ShowMoveMarkers(selectedUnit);
+                    return;
+                }
+            }
+
+            // 1b) иначе — выделяем (обычно своего; можно разрешить “смотреть” на врага позже)
+            SelectUnit(clickedUnit);
             return;
         }
 
+        // 2) клик по пустому тайлу — пытаемся ходить
         if (selectedUnit != null)
         {
             bool moved = TryMoveSelectedUnitTo(tile);
@@ -74,10 +87,6 @@ public class UnitMovementSystem : MonoBehaviour
 
     private void Update()
     {
-        // ✅ ВАЖНО: по умолчанию выключено, чтобы НЕ было двойного клика с TileSelector
-        if (!handleClicksInternally)
-            return;
-
         if (Input.GetMouseButtonDown(0))
         {
             if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
@@ -107,6 +116,8 @@ public class UnitMovementSystem : MonoBehaviour
 
     private void SelectUnit(Unit unit)
     {
+        if (unit == null) return;
+
         selectedUnit = unit;
 
         // на всякий случай сразу выровняем по тайлу
@@ -114,6 +125,28 @@ public class UnitMovementSystem : MonoBehaviour
         selectedUnit.SnapToCurrentTile();
 
         ShowMoveMarkers(unit);
+    }
+
+    private bool TryAttackSelectedUnit(Unit targetUnit)
+    {
+        if (selectedUnit == null || targetUnit == null) return false;
+        if (combatSystem == null) return false;
+
+        // запретим атаковать, если нет ходов
+        if (!selectedUnit.HasMoves()) return false;
+
+        bool ok = combatSystem.TryAttack(selectedUnit, targetUnit);
+
+        // если атакер умер (контратака) — снимем выделение
+        if (selectedUnit == null || selectedUnit.IsDead)
+        {
+            ClearSelection();
+            return ok;
+        }
+
+        // после атаки кружки обычно исчезнут (moves=0)
+        ClearMarkers();
+        return ok;
     }
 
     private bool TryMoveSelectedUnitTo(Tile target)
@@ -166,13 +199,12 @@ public class UnitMovementSystem : MonoBehaviour
         unit.transform.position = to;
 
         unit.SetTile(target, instant: true);
-        unit.SpendMovePoint(cost);
 
-        unit.SetMoving(false);
-        unit.SnapToCurrentTile();
+        unit.SpendMovePoint(cost);
 
         ShowMoveMarkers(unit);
 
+        unit.SetMoving(false);
         moveRoutine = null;
     }
 
@@ -184,6 +216,7 @@ public class UnitMovementSystem : MonoBehaviour
         if (!unit.HasMoves()) return;
 
         int range = unit.MovesLeftThisTurn;
+
         Tile origin = unit.CurrentTile;
         if (origin == null) return;
 
@@ -195,8 +228,6 @@ public class UnitMovementSystem : MonoBehaviour
                 if (dist == 0 || dist > range) continue;
 
                 Vector2Int gp = origin.GridPosition + new Vector2Int(dx, dy);
-
-                // ✅ используем registry из Tile вместо FindObjectsOfType()
                 Tile t = FindTileAt(gp);
                 if (t == null) continue;
 
@@ -250,11 +281,11 @@ public class UnitMovementSystem : MonoBehaviour
 
     private Tile FindTileAt(Vector2Int gridPos)
     {
-        // ✅ быстрый путь через registry
+        // быстрый путь через registry
         if (Tile.TryGetTile(gridPos, out Tile tile) && tile != null)
             return tile;
 
-        // fallback на всякий случай (если где-то Init не вызвали)
+        // fallback
         Tile[] tiles = FindObjectsOfType<Tile>();
         foreach (var t in tiles)
         {
@@ -267,7 +298,10 @@ public class UnitMovementSystem : MonoBehaviour
     {
         if (tile == null) return null;
 
-        // Безопасно оставляем текущий способ (пока Unit не гарантирует AssignUnit/ClearUnit)
+        // сначала попробуем “правильную” ссылку
+        if (tile.UnitOnTile != null) return tile.UnitOnTile;
+
+        // fallback
         Unit[] units = FindObjectsOfType<Unit>();
         foreach (var u in units)
         {

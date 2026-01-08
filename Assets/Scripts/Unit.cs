@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 public class Unit : MonoBehaviour
@@ -25,8 +26,13 @@ public class Unit : MonoBehaviour
     private Tile currentTile;
     private int movesLeftThisTurn;
 
+    // HP
+    private int currentHp;
+
+    // чтобы LateUpdate не мешал корутине движения
     private bool isMoving;
 
+    // буфер для RaycastNonAlloc (без аллокаций)
     private readonly RaycastHit[] hitBuffer = new RaycastHit[16];
 
     public PlayerId Owner => owner;
@@ -35,11 +41,25 @@ public class Unit : MonoBehaviour
     public int MovePointsPerTurn => (stats != null) ? stats.movePointsPerTurn : 3;
     public int MovesLeftThisTurn => movesLeftThisTurn;
 
+    public int Attack => (stats != null) ? stats.attack : 1;
+    public int Defense => (stats != null) ? stats.defense : 1;
+
+    public int MaxHP => (stats != null) ? stats.hp : 10;
+    public int CurrentHP => currentHp;
+    public bool IsDead => currentHp <= 0;
+
+    public event Action<Unit> OnHealthChanged;
+
     public void Initialize(PlayerId ownerId, Tile startTile)
     {
         owner = ownerId;
+
+        // HP при спавне
+        currentHp = MaxHP;
+
         SetTile(startTile, instant: true);
         ResetMoves();
+        RaiseHealthChanged();
     }
 
     public void ResetMoves()
@@ -57,45 +77,74 @@ public class Unit : MonoBehaviour
         movesLeftThisTurn = Mathf.Max(0, movesLeftThisTurn - Mathf.Max(1, cost));
     }
 
+    public void ConsumeAllMoves()
+    {
+        movesLeftThisTurn = 0;
+    }
+
     public void SetMoving(bool value)
     {
         isMoving = value;
     }
 
+    public void TakeDamage(int amount)
+    {
+        if (amount <= 0) return;
+
+        currentHp = Mathf.Max(0, currentHp - amount);
+        RaiseHealthChanged();
+    }
+
+    private void RaiseHealthChanged()
+    {
+        OnHealthChanged?.Invoke(this);
+    }
+
+    public void Die()
+    {
+        // аккуратно очистить ссылку на тайле
+        if (currentTile != null)
+        {
+            // старое поведение
+            currentTile.OnUnitLeave();
+
+            // новое (если используешь AssignUnit/UnitOnTile)
+            currentTile.ClearUnit(this);
+        }
+
+        Destroy(gameObject);
+    }
+
+    // ✅ выравнивание по текущему тайлу (использует UnitMovementSystem)
     public void SnapToCurrentTile()
     {
         if (currentTile == null) return;
         transform.position = GetWorldPositionOnTile(currentTile);
     }
 
-    // ✅ ВАЖНО: тут фиксим консистентность UnitOnTile/HasUnit
     public void SetTile(Tile tile, bool instant)
     {
-        // Снимаем себя с предыдущего тайла
+        // снять со старого тайла
         if (currentTile != null)
         {
-            // Новая система (реальная ссылка UnitOnTile)
-            currentTile.ClearUnit(this);
-
-            // Старая система (флаг HasUnit) — оставляем для совместимости
             currentTile.OnUnitLeave();
+            currentTile.ClearUnit(this);
         }
 
         currentTile = tile;
 
-        // Назначаем себя на новый тайл
+        // поставить на новый тайл
         if (currentTile != null)
         {
-            // Новая система (UnitOnTile + HasUnit)
-            currentTile.AssignUnit(this);
-
-            // Старая система — для совместимости
             currentTile.OnUnitEnter();
-
+            currentTile.AssignUnit(this);
             transform.position = GetWorldPositionOnTile(currentTile);
         }
     }
 
+    /// <summary>
+    /// Мировая позиция на тайле: XZ = центр тайла, Y = поверхность тайла (raycast) + yOffset.
+    /// </summary>
     public Vector3 GetWorldPositionOnTile(Tile tile)
     {
         if (tile == null) return transform.position;
@@ -115,45 +164,59 @@ public class Unit : MonoBehaviour
         Ray ray = new Ray(origin, Vector3.down);
 
         int hitCount = Physics.RaycastNonAlloc(ray, hitBuffer, groundRayLength);
+        if (hitCount <= 0)
+        {
+            // fallback
+            return tile.TopHeight;
+        }
 
-        float bestY = tile.transform.position.y + tile.TopHeight;
-        float bestDist = float.MaxValue;
+        float bestY = float.NegativeInfinity;
+        bool found = false;
 
         for (int i = 0; i < hitCount; i++)
         {
-            var h = hitBuffer[i];
-            if (h.collider == null) continue;
+            Collider col = hitBuffer[i].collider;
+            if (col == null) continue;
 
-            // берём ближайшее попадание
-            if (h.distance < bestDist)
+            // только коллайдеры этого тайла (не деревья/камни)
+            Tile hitTile = col.GetComponentInParent<Tile>();
+            if (hitTile != tile) continue;
+
+            float y = hitBuffer[i].point.y;
+            if (!found || y > bestY)
             {
-                bestDist = h.distance;
-                bestY = h.point.y;
+                bestY = y;
+                found = true;
             }
         }
 
-        return bestY;
-    }
+        if (found)
+            return bestY;
 
-    public void FaceDirection(Vector3 dir)
-    {
-        dir.y = 0f;
-        if (dir.sqrMagnitude < 0.0001f) return;
-
-        Quaternion look = Quaternion.LookRotation(dir.normalized, Vector3.up);
-
-        if (modelRoot != null)
-            modelRoot.rotation = look * Quaternion.Euler(0f, modelYawOffset, 0f);
-        else
-            transform.rotation = look * Quaternion.Euler(0f, modelYawOffset, 0f);
+        return tile.TopHeight;
     }
 
     private void LateUpdate()
     {
+        // пока не двигаемся — всегда "липнем" к текущей поверхности тайла
         if (isMoving) return;
         if (currentTile == null) return;
 
-        // держим на поверхности тайла
         transform.position = GetWorldPositionOnTile(currentTile);
+    }
+
+    public void FaceDirection(Vector3 worldDir)
+    {
+        if (worldDir.sqrMagnitude < 0.0001f) return;
+
+        Vector3 flat = new Vector3(worldDir.x, 0f, worldDir.z).normalized;
+
+        Quaternion look = Quaternion.LookRotation(flat, Vector3.up);
+        Quaternion yawFix = Quaternion.Euler(0f, modelYawOffset, 0f);
+
+        if (modelRoot != null)
+            modelRoot.rotation = look * yawFix;
+        else
+            transform.rotation = look * yawFix;
     }
 }
