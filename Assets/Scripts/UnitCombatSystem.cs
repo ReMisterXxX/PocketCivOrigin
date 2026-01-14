@@ -5,79 +5,80 @@ public class UnitCombatSystem : MonoBehaviour
     [Header("Combat")]
     [SerializeField] private bool enableCounterAttack = true;
 
+    [Range(0f, 1f)]
+    [SerializeField] private float counterAttackMultiplier = 0.5f;
+
     [Header("Testing")]
-    [Tooltip("ВРЕМЕННО: разрешает бить своих для тестов. Потом выключим.")]
     [SerializeField] private bool allowFriendlyFire = true;
 
-    public bool TryAttack(Unit attacker, Unit defender)
+    public bool EnableCounterAttack => enableCounterAttack;
+    public float CounterAttackMultiplier => counterAttackMultiplier;
+
+    public struct CombatResult
+    {
+        public bool didAttack;
+        public bool didCounter;
+        public int damageToDefender;
+        public int damageToAttacker;
+        public bool defenderDied;
+        public bool attackerDied;
+    }
+
+    public bool CanAttack(Unit attacker, Unit defender)
     {
         if (attacker == null || defender == null) return false;
         if (attacker == defender) return false;
 
         if (attacker.CurrentTile == null || defender.CurrentTile == null) return false;
 
-        // ✅ ВРЕМЕННО: можно/нельзя бить своих
         if (!allowFriendlyFire && attacker.Owner == defender.Owner)
             return false;
 
-        // атака только по соседней клетке (включая диагональ)
-        if (!IsAdjacent(attacker.CurrentTile, defender.CurrentTile)) return false;
+        int range = GetAttackRange(attacker);
+        if (!IsInRange(attacker.CurrentTile, defender.CurrentTile, range))
+            return false;
 
-        // если у атакера нет ходов — запрещаем
         if (!attacker.HasMoves()) return false;
 
-        // 1) атакер бьёт дефендера
-        int dmgToDef = CalculateDamage(
-            attack: attacker.Attack,
-            targetDefense: defender.Defense,
-            targetTile: defender.CurrentTile
-        );
-
-        defender.TakeDamage(dmgToDef);
-
-        // если защитник умер — удаляем и всё
-        if (defender.IsDead)
-        {
-            defender.Die();
-
-            // атака заканчивает ход
-            attacker.ConsumeAllMoves();
-            return true;
-        }
-
-        // 2) контратака
-        if (enableCounterAttack)
-        {
-            int dmgToAtk = CalculateDamage(
-                attack: defender.Attack,
-                targetDefense: attacker.Defense,
-                targetTile: attacker.CurrentTile
-            );
-
-            attacker.TakeDamage(dmgToAtk);
-
-            if (attacker.IsDead)
-            {
-                attacker.Die();
-                return true;
-            }
-        }
-
-        // атака заканчивает ход
-        attacker.ConsumeAllMoves();
         return true;
     }
 
-    private int CalculateDamage(int attack, int targetDefense, Tile targetTile)
+    public int GetAttackRange(Unit attacker)
     {
-        int terrainBonus = GetTerrainDefenseBonus(targetTile);
-        int reduced = targetDefense + terrainBonus;
-
-        // твоя логика: защита уменьшает входящий урон на своё значение
-        return Mathf.Max(0, attack - reduced);
+        if (attacker != null && attacker.Stats != null)
+            return Mathf.Max(1, attacker.Stats.AttackRange);
+        return 1;
     }
 
-    private int GetTerrainDefenseBonus(Tile tile)
+    public CombatResult ResolveAttack(Unit attacker, Unit defender)
+    {
+        CombatResult r = new CombatResult();
+
+        if (!CanAttack(attacker, defender))
+            return r;
+
+        r.didAttack = true;
+
+        r.damageToDefender = CalculateDamage(attacker.Attack, defender.Defense, defender.CurrentTile);
+        defender.TakeDamage(r.damageToDefender);
+        r.defenderDied = defender.IsDead;
+
+        if (enableCounterAttack && !r.defenderDied)
+        {
+            r.didCounter = true;
+
+            int raw = CalculateDamage(defender.Attack, attacker.Defense, attacker.CurrentTile);
+            r.damageToAttacker = Mathf.Max(0, Mathf.RoundToInt(raw * counterAttackMultiplier));
+
+            attacker.TakeDamage(r.damageToAttacker);
+            r.attackerDied = attacker.IsDead;
+        }
+
+        attacker.ConsumeAllMoves();
+        return r;
+    }
+
+    public int GetTerrainDefenseBonus(Tile tile)
     {
         if (tile == null) return 0;
 
@@ -89,7 +90,14 @@ public class UnitCombatSystem : MonoBehaviour
         }
     }
 
-    private bool IsAdjacent(Tile a, Tile b)
+    private int CalculateDamage(int attack, int targetDefense, Tile targetTile)
+    {
+        int terrainBonus = GetTerrainDefenseBonus(targetTile);
+        int reduced = targetDefense + terrainBonus;
+        return Mathf.Max(0, attack - reduced);
+    }
+
+    private bool IsInRange(Tile a, Tile b, int range)
     {
         Vector2Int pa = a.GridPosition;
         Vector2Int pb = b.GridPosition;
@@ -97,6 +105,7 @@ public class UnitCombatSystem : MonoBehaviour
         int dx = Mathf.Abs(pa.x - pb.x);
         int dy = Mathf.Abs(pa.y - pb.y);
 
-        return (dx <= 1 && dy <= 1) && !(dx == 0 && dy == 0);
+        int cheb = Mathf.Max(dx, dy);
+        return cheb >= 1 && cheb <= range;
     }
 }

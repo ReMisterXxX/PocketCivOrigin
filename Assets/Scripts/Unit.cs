@@ -23,6 +23,7 @@ public class Unit : MonoBehaviour
     [SerializeField] private float groundRayLength = 20f;
 
     private PlayerId owner;
+    public UnitStats Stats => stats;
     private Tile currentTile;
     private int movesLeftThisTurn;
 

@@ -13,8 +13,9 @@ MonoBehaviour:
   m_Name: MainKnight_Stats
   m_EditorClassIdentifier: 
   movePointsPerTurn: 3
-  attack: 1
+  attack: 3
   defense: 1
   hp: 10
+  attackRange: 1
   goldCost: 15
   coalCost: 5
