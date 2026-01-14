@@ -6,11 +6,6 @@ public class UnitHealthBar : MonoBehaviour
     [Header("Refs")]
     [SerializeField] private Unit unit;
     [SerializeField] private Image fillImage;
-    [SerializeField] private PlayerResources playerResources;
-
-    [Header("Colors")]
-    [SerializeField] private Color myHpColor = new Color(0.15f, 0.95f, 0.25f, 1f);
-    [SerializeField] private Color otherHpColor = new Color(0.95f, 0.20f, 0.20f, 1f);
 
     [Header("Follow")]
     [SerializeField] private Vector3 worldOffset = new Vector3(0f, 0.35f, 0f);
@@ -20,7 +15,6 @@ public class UnitHealthBar : MonoBehaviour
     {
         if (cam == null) cam = Camera.main;
         if (unit == null) unit = GetComponentInParent<Unit>();
-        if (playerResources == null) playerResources = FindObjectOfType<PlayerResources>();
     }
 
     private void OnEnable()
@@ -49,10 +43,9 @@ public class UnitHealthBar : MonoBehaviour
         float t = (u.MaxHP <= 0) ? 0f : (float)u.CurrentHP / u.MaxHP;
         fillImage.fillAmount = t;
 
-        // цвет по принадлежности
-        if (playerResources != null && u.Owner == playerResources.CurrentPlayer)
-            fillImage.color = myHpColor;
-        else
-            fillImage.color = otherHpColor;
+        // ✅ Цвет HP должен соответствовать цвету территории/игрока, а не "мой/чужой".
+        Color c = PlayerColorManager.GetColor(u.Owner);
+        c.a = 1f;
+        fillImage.color = c;
     }
 }

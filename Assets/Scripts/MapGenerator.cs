@@ -103,7 +103,6 @@ public class MapGenerator : MonoBehaviour
 
     public int maxGoldDeposits = 6;
     public int maxCoalDeposits = 6;
-
     private Tile[,] tiles;
 
     private void Start()
@@ -434,50 +433,82 @@ public class MapGenerator : MonoBehaviour
     }
 
     // ====== СОЗДАНИЕ СТАРТОВОГО ГОРОДА И ФОКУС КАМЕРЫ ======
-    private void SpawnStartingCityAndFocusCamera()
+    private Tile SpawnStartingCity(PlayerId owner)
     {
         if (cityPrefab == null)
         {
             Debug.LogWarning("City prefab is not assigned in MapGenerator!");
-            return;
+            return null;
         }
 
-        // собираем подходящие тайлы: не вода и не горы
+        // минимальная дистанция между стартовыми городами (в Чебышёвской метрике)
+        // Радиус территории 2 => города должны быть минимум на 5 клеток "по сетке" друг от друга
+        int minDistance = cityTerritoryRadius * 2 + 1;
+
+        // 1) собираем кандидатов: не вода, не горы, не занято зданием
         List<Tile> candidates = new List<Tile>();
         foreach (Tile t in tiles)
         {
             if (t == null) continue;
             if (t.TerrainType == TileTerrainType.Water) continue;
             if (t.TerrainType == TileTerrainType.Mountain) continue;
+            if (t.HasBuilding) continue;
+
+            // 2) если уже есть стартовый город другого игрока — не ставим рядом
+            bool tooClose = false;
+            foreach (var kv in startCityByPlayer)
+            {
+                Tile other = kv.Value;
+                if (other == null) continue;
+
+                int dx = Mathf.Abs(other.GridPosition.x - t.GridPosition.x);
+                int dy = Mathf.Abs(other.GridPosition.y - t.GridPosition.y);
+
+                if (Mathf.Max(dx, dy) < minDistance) // строго ближе чем minDistance
+                {
+                    tooClose = true;
+                    break;
+                }
+            }
+
+            if (tooClose) continue;
 
             candidates.Add(t);
         }
 
+        // если кандидатов нет (карта маленькая/горы/вода) — делаем fallback без ограничения дистанции
         if (candidates.Count == 0)
         {
-            Debug.LogWarning("No suitable tiles for a city!");
-            return;
+            foreach (Tile t in tiles)
+            {
+                if (t == null) continue;
+                if (t.TerrainType == TileTerrainType.Water) continue;
+                if (t.TerrainType == TileTerrainType.Mountain) continue;
+                if (t.HasBuilding) continue;
+                candidates.Add(t);
+            }
         }
 
-        // выбираем случайный тайл
+        if (candidates.Count == 0)
+            return null;
+
         Tile cityTile = candidates[Random.Range(0, candidates.Count)];
 
         // позиция города — чуть над верхом тайла
         Vector3 pos = cityTile.transform.position;
         pos.y = cityTile.TopHeight + 0.01f;
 
-        // делаем город дочерним объектом тайла, чтобы он поднимался вместе с ним
-        GameObject cityGO = Instantiate(cityPrefab, pos, Quaternion.identity, cityTile.transform);
+        Instantiate(cityPrefab, pos, Quaternion.identity, cityTile.transform);
 
-        // помечаем, что на тайле есть здание и владелец
+        // помечаем тайл
         cityTile.SetCityPresent(true);
-        cityTile.SetOwner(startingPlayer);
+        cityTile.SetOwner(owner);
 
-        // цвет территории — цвет игрокаА
-        Color territoryColor = PlayerColorManager.GetColor(startingPlayer);
+        // цвет территории — цвет игрока
+        Color territoryColor = PlayerColorManager.GetColor(owner);
         territoryColor.a = cityTerritoryAlpha;
 
-        // красим тайлы в радиусе
+        // красим тайлы в радиусе территории
         int cx = cityTile.GridPosition.x;
         int cy = cityTile.GridPosition.y;
 
@@ -495,70 +526,16 @@ public class MapGenerator : MonoBehaviour
                 if (t == null) continue;
 
                 t.SetTerritoryColor(territoryColor);
-                t.SetOwner(startingPlayer);
+                t.SetOwner(owner);
             }
         }
 
-        // фокусируем камеру на город
-        CameraController cam = FindObjectOfType<CameraController>();
-        if (cam != null)
-        {
-            cam.JumpToPosition(cityTile.transform.position);
-        }
-    }
-    private Tile SpawnStartingCity(PlayerId owner)
-{
-    List<Tile> candidates = new List<Tile>();
-    foreach (Tile t in tiles)
-    {
-        if (t == null) continue;
-        if (t.TerrainType == TileTerrainType.Water) continue;
-        if (t.TerrainType == TileTerrainType.Mountain) continue;
-        if (t.HasBuilding) continue;
-
-        candidates.Add(t);
+        startCityByPlayer[owner] = cityTile;
+        return cityTile;
     }
 
-    if (candidates.Count == 0)
-        return null;
 
-    Tile cityTile = candidates[Random.Range(0, candidates.Count)];
-
-    Vector3 pos = cityTile.transform.position;
-    pos.y = cityTile.TopHeight + 0.01f;
-
-    GameObject cityGO = Instantiate(cityPrefab, pos, Quaternion.identity, cityTile.transform);
-
-    cityTile.SetCityPresent(true);
-    cityTile.SetOwner(owner);
-
-    Color territoryColor = PlayerColorManager.GetColor(owner);
-    territoryColor.a = cityTerritoryAlpha;
-
-    int cx = cityTile.GridPosition.x;
-    int cy = cityTile.GridPosition.y;
-
-    for (int dx = -cityTerritoryRadius; dx <= cityTerritoryRadius; dx++)
-    {
-        for (int dy = -cityTerritoryRadius; dy <= cityTerritoryRadius; dy++)
-        {
-            int nx = cx + dx;
-            int ny = cy + dy;
-
-            if (nx < 0 || nx >= width || ny < 0 || ny >= height)
-                continue;
-
-            Tile t = tiles[nx, ny];
-            if (t == null) continue;
-
-            t.SetTerritoryColor(territoryColor);
-            t.SetOwner(owner);
-        }
-    }
-
-    startCityByPlayer[owner] = cityTile;
-    return cityTile;
-}
+    
 
     // ====== Генерация ресурсных месторождений ======
     private void GenerateResourceDeposits()
@@ -643,6 +620,23 @@ public class MapGenerator : MonoBehaviour
             coalDepositPrefabs,
             coalMountainDepositPrefabs,
             startingPlayer);
+
+            // ✅ То же самое для второго стартового игрока (если включён)
+        if (spawnSecondStartingCity)
+        {
+            EnsureDepositInPlayerTerritory(
+                ResourceType.Gold,
+                goldDepositPrefabs,
+                goldMountainDepositPrefabs,
+                secondStartingPlayer);
+
+            EnsureDepositInPlayerTerritory(
+                ResourceType.Coal,
+                coalDepositPrefabs,
+                coalMountainDepositPrefabs,
+                secondStartingPlayer);
+        }
+
     }
 
     private bool IsMountainEdgeTile(int x, int y)

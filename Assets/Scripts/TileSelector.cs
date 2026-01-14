@@ -49,13 +49,11 @@ public class TileSelector : MonoBehaviour
 
                 if (unitMovementSystem != null)
                 {
-                    unitMovementSystem.OnTileSelectionChanged();
-                    unitMovementSystem.OnTileClicked(tile);
+                    // ✅ один вызов — иначе будет двойная обработка и сброс
+                    unitMovementSystem.HandleTileClick(tile);
                 }
 
-                // ✅ После OnTileClicked() система могла выбрать юнита.
                 RefreshAttackButton();
-
                 return;
             }
         }

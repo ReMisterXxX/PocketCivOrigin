@@ -33,6 +33,23 @@ public static class PlayerColorManager
 
     public static Color GetColor(PlayerId playerId)
     {
+        // ✅ Явная раскладка для первых игроков — чтобы цвета были максимально контрастные.
+        // Требование: Player1 = красный, Player2 = синий.
+        // Остальные — из пула дальше.
+        if (playerId == PlayerId.Player1)
+        {
+            if (!assignedColors.ContainsKey(playerId))
+                assignedColors[playerId] = colorPool[0]; // Red
+            return assignedColors[playerId];
+        }
+
+        if (playerId == PlayerId.Player2)
+        {
+            if (!assignedColors.ContainsKey(playerId))
+                assignedColors[playerId] = colorPool[2]; // Blue
+            return assignedColors[playerId];
+        }
+
         if (assignedColors.TryGetValue(playerId, out var existing))
             return existing;
 

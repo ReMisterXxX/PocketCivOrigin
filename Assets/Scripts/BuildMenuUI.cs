@@ -35,6 +35,7 @@ public class BuildMenuUI : MonoBehaviour
         cg = panel.GetComponent<CanvasGroup>();
         if (cg == null) cg = panel.AddComponent<CanvasGroup>();
 
+        // ✅ скрываем через CanvasGroup, НЕ выключая объект
         HideInstant();
 
         if (buildSystem == null) buildSystem = FindObjectOfType<BuildSystem>();
@@ -44,6 +45,21 @@ public class BuildMenuUI : MonoBehaviour
 
         if (buildCityButton != null) buildCityButton.onClick.AddListener(OnBuildCity);
         if (buildMineButton != null) buildMineButton.onClick.AddListener(OnBuildMine);
+
+        // ===============================
+        // ✅ ФИКС: названия кнопок построек
+        // ===============================
+        var cityLabel = buildCityButton != null
+            ? buildCityButton.GetComponentInChildren<TextMeshProUGUI>(true)
+            : null;
+        if (cityLabel != null)
+            cityLabel.text = "Build City";
+
+        var mineLabel = buildMineButton != null
+            ? buildMineButton.GetComponentInChildren<TextMeshProUGUI>(true)
+            : null;
+        if (mineLabel != null)
+            mineLabel.text = "Build Mine";
     }
 
     public void ShowForTile(Tile tile)
@@ -51,10 +67,10 @@ public class BuildMenuUI : MonoBehaviour
         currentTile = tile;
         if (currentTile == null) return;
 
-        // ✅ Блок чужого игрока
+        // ✅ нельзя строить на чужой территории
         bool isMine = playerResources == null || currentTile.Owner == playerResources.CurrentPlayer;
-        buildCityButton.interactable = isMine;
-        buildMineButton.interactable = isMine;
+        if (buildCityButton != null) buildCityButton.interactable = isMine;
+        if (buildMineButton != null) buildMineButton.interactable = isMine;
 
         if (titleText != null)
         {
@@ -110,8 +126,6 @@ public class BuildMenuUI : MonoBehaviour
 
     private IEnumerator Animate(bool show)
     {
-        if (show) panel.SetActive(true);
-
         float start = cg.alpha;
         float end = show ? 1f : 0f;
 
@@ -122,14 +136,11 @@ public class BuildMenuUI : MonoBehaviour
         while (t < animDuration)
         {
             t += Time.deltaTime;
-            cg.alpha = Mathf.Lerp(start, end, t / animDuration);
+            cg.alpha = Mathf.Lerp(start, end, t / Mathf.Max(0.0001f, animDuration));
             yield return null;
         }
 
         cg.alpha = end;
-
-        if (!show)
-            panel.SetActive(false);
     }
 
     private void HideInstant()
@@ -137,6 +148,5 @@ public class BuildMenuUI : MonoBehaviour
         cg.alpha = 0f;
         cg.blocksRaycasts = false;
         cg.interactable = false;
-        panel.SetActive(false);
     }
 }

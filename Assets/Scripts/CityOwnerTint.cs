@@ -2,8 +2,14 @@ using UnityEngine;
 
 public class CityOwnerTint : MonoBehaviour
 {
+    [Header("Config")]
+    [Tooltip("Если false — город НЕ будет перекрашиваться цветом владельца (требование: сами города не красить).")]
+    [SerializeField] private bool tintCity = false;
+
     private void Start()
     {
+        if (!tintCity) return;
+
         Tile tile = GetComponentInParent<Tile>();
         if (tile == null) return;
 
