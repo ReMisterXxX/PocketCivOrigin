@@ -3,6 +3,21 @@ using UnityEngine;
 
 public class MapGenerator : MonoBehaviour
 {
+    public static MapGenerator Instance { get; private set; }
+
+    private readonly Dictionary<PlayerId, Tile> startCityByPlayer = new Dictionary<PlayerId, Tile>();
+
+    public Tile GetStartCityTile(PlayerId player)
+    {
+        startCityByPlayer.TryGetValue(player, out var t);
+        return t;
+    }
+
+    private void Awake()
+    {
+        Instance = this;
+    }
+
     [Header("Размер карты")]
     public int width = 20;
     public int height = 20;
@@ -75,6 +90,9 @@ public class MapGenerator : MonoBehaviour
     [Header("Игроки")]
     public PlayerId startingPlayer = PlayerId.Player1; // владелец стартового города
 
+    public bool spawnSecondStartingCity = true;
+    public PlayerId secondStartingPlayer = PlayerId.Player2; // владелец второго стартового города
+
     [Header("Resource deposits (поля/общие префабы)")]
     public GameObject[] goldDepositPrefabs;   // золото на равнинах/в лесу
     public GameObject[] coalDepositPrefabs;   // уголь на равнинах/в лесу
@@ -129,7 +147,20 @@ public class MapGenerator : MonoBehaviour
         }
 
         // 1) создаём стартовый город и фокусируем камеру
-        SpawnStartingCityAndFocusCamera();
+        Tile firstCity = SpawnStartingCity(startingPlayer);
+
+        if (spawnSecondStartingCity)
+        {
+            SpawnStartingCity(secondStartingPlayer);
+        }
+
+        // камера — на стартового игрока
+        CameraController cam = FindObjectOfType<CameraController>();
+        if (cam != null && firstCity != null)
+        {
+            cam.JumpToPosition(firstCity.transform.position);
+        }
+
 
         // 2) генерируем месторождения
         GenerateResourceDeposits();
@@ -475,6 +506,59 @@ public class MapGenerator : MonoBehaviour
             cam.JumpToPosition(cityTile.transform.position);
         }
     }
+    private Tile SpawnStartingCity(PlayerId owner)
+{
+    List<Tile> candidates = new List<Tile>();
+    foreach (Tile t in tiles)
+    {
+        if (t == null) continue;
+        if (t.TerrainType == TileTerrainType.Water) continue;
+        if (t.TerrainType == TileTerrainType.Mountain) continue;
+        if (t.HasBuilding) continue;
+
+        candidates.Add(t);
+    }
+
+    if (candidates.Count == 0)
+        return null;
+
+    Tile cityTile = candidates[Random.Range(0, candidates.Count)];
+
+    Vector3 pos = cityTile.transform.position;
+    pos.y = cityTile.TopHeight + 0.01f;
+
+    GameObject cityGO = Instantiate(cityPrefab, pos, Quaternion.identity, cityTile.transform);
+
+    cityTile.SetCityPresent(true);
+    cityTile.SetOwner(owner);
+
+    Color territoryColor = PlayerColorManager.GetColor(owner);
+    territoryColor.a = cityTerritoryAlpha;
+
+    int cx = cityTile.GridPosition.x;
+    int cy = cityTile.GridPosition.y;
+
+    for (int dx = -cityTerritoryRadius; dx <= cityTerritoryRadius; dx++)
+    {
+        for (int dy = -cityTerritoryRadius; dy <= cityTerritoryRadius; dy++)
+        {
+            int nx = cx + dx;
+            int ny = cy + dy;
+
+            if (nx < 0 || nx >= width || ny < 0 || ny >= height)
+                continue;
+
+            Tile t = tiles[nx, ny];
+            if (t == null) continue;
+
+            t.SetTerritoryColor(territoryColor);
+            t.SetOwner(owner);
+        }
+    }
+
+    startCityByPlayer[owner] = cityTile;
+    return cityTile;
+}
 
     // ====== Генерация ресурсных месторождений ======
     private void GenerateResourceDeposits()

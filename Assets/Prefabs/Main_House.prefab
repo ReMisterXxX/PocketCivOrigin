@@ -62,10 +62,30 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 919132149155446097, guid: 1a607b5e3a2faea49bea637a8db6b091, type: 3}
       propertyPath: m_Name
-      value: House2
+      value: Main_House
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 1a607b5e3a2faea49bea637a8db6b091, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: -3935822849784164586}
   m_SourcePrefab: {fileID: 100100000, guid: 1a607b5e3a2faea49bea637a8db6b091, type: 3}
+--- !u!1 &2058571922317989368 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 919132149155446097, guid: 1a607b5e3a2faea49bea637a8db6b091, type: 3}
+  m_PrefabInstance: {fileID: 1175700706721949865}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &-3935822849784164586
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2058571922317989368}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2c80c10276772a7449d891cef1f7bdef, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 

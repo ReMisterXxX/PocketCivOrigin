@@ -11,7 +11,7 @@ public class TurnManager : MonoBehaviour
     public UnitMovementSystem unitMovementSystem;
 
     [Header("Optional UI")]
-    [SerializeField] private Button nextTurnButton; // назначь NextTurnButton сюда (если хочешь блокировку)
+    [SerializeField] private Button nextTurnButton;
 
     [Header("Popup colors")]
     public Color goldPopupColor = new Color(1f, 0.85f, 0.15f, 1f);
@@ -32,18 +32,22 @@ public class TurnManager : MonoBehaviour
         if (unitMovementSystem == null)
             unitMovementSystem = FindObjectOfType<UnitMovementSystem>();
 
-        // ✅ ВАЖНО: чтобы UI обновлялся сразу при любом изменении ресурсов (TrySpend/ApplyTurnIncome/etc)
         if (playerResources != null)
             playerResources.OnChanged += HandleResourcesChanged;
 
+        // стартовый апдейт
         if (playerResources != null)
-            playerResources.RecalculateIncome(); // внутри будет RaiseChanged()
+            playerResources.RecalculateIncome();
 
         if (topPanelUI != null && playerResources != null)
         {
             topPanelUI.UpdateAll(playerResources);
             topPanelUI.UpdateTurn(currentTurn);
         }
+
+        // сброс ходов стартового игрока
+        if (unitMovementSystem != null && playerResources != null)
+            unitMovementSystem.ResetUnitsForNewTurn(playerResources.CurrentPlayer);
 
         yield return null;
     }
@@ -62,7 +66,7 @@ public class TurnManager : MonoBehaviour
 
     public void NextTurn()
     {
-        if (isAdvancingTurn) return; // ✅ анти-спам
+        if (isAdvancingTurn) return;
         StartCoroutine(NextTurnRoutine());
     }
 
@@ -71,34 +75,66 @@ public class TurnManager : MonoBehaviour
         isAdvancingTurn = true;
         if (nextTurnButton != null) nextTurnButton.interactable = false;
 
-        // дождёмся конца кадра (на случай если в этом кадре что-то ещё менялось)
         yield return null;
 
         if (playerResources != null)
         {
-            // ✅ сначала пересчитать доход, потом начислить
-            playerResources.RecalculateIncome();     // RaiseChanged() внутри
-            playerResources.ApplyTurnIncome();       // RaiseChanged() внутри
+            // 1) переключаем игрока
+            var next = GetNextPlayer(playerResources.CurrentPlayer);
+            playerResources.SetCurrentPlayer(next);
 
-            // ✅ показать всплывающие доходы над жилами
+            Tile startCity = MapGenerator.Instance?.GetStartCityTile(next);
+            CameraController cam = FindObjectOfType<CameraController>();
+
+            if (cam != null && startCity != null)
+            {
+                cam.JumpToPosition(startCity.transform.position);
+            }
+
+
+            // 2) доход для нового текущего игрока
+            playerResources.RecalculateIncome();
+            playerResources.ApplyTurnIncome();
+
+            // 3) попапы дохода — только на его территории
             ShowIncomePopupsForCurrentPlayer();
         }
 
         currentTurn++;
 
-        // ✅ сброс ходов юнитов
-        if (unitMovementSystem != null)
-            unitMovementSystem.ResetAllUnitsForNewTurn();
+        // 4) сброс ходов только юнитам активного игрока
+        if (unitMovementSystem != null && playerResources != null)
+        {
+            unitMovementSystem.ClearSelection(); // чтобы нельзя было "тащить" чужое выделение между ходами
+            unitMovementSystem.ResetUnitsForNewTurn(playerResources.CurrentPlayer);
+        }
 
-        // ✅ обновим текст хода (и пульс) ОДИН раз
         if (topPanelUI != null)
             topPanelUI.UpdateTurn(currentTurn);
 
-        // маленькая пауза, чтобы исключить двойной клик в тот же кадр
         yield return null;
 
         if (nextTurnButton != null) nextTurnButton.interactable = true;
         isAdvancingTurn = false;
+    }
+
+    private PlayerId GetNextPlayer(PlayerId current)
+    {
+        var list = playerResources.ActivePlayers;
+        if (list == null || list.Count == 0) return current;
+
+        int idx = 0;
+        for (int i = 0; i < list.Count; i++)
+        {
+            if (list[i] == current)
+            {
+                idx = i;
+                break;
+            }
+        }
+
+        int nextIdx = (idx + 1) % list.Count;
+        return list[nextIdx];
     }
 
     private void ShowIncomePopupsForCurrentPlayer()

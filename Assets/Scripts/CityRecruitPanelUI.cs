@@ -134,7 +134,8 @@ public class CityRecruitPanelUI : MonoBehaviour
             return;
         }
 
-        if (currentTile.Owner != playerResources.currentPlayer)
+        // ✅ FIX: currentPlayer -> CurrentPlayer
+        if (currentTile.Owner != playerResources.CurrentPlayer)
         {
             Debug.Log("[Recruit] Can't recruit in чужом городе.");
             return;
@@ -168,7 +169,8 @@ public class CityRecruitPanelUI : MonoBehaviour
         Unit unit = go.GetComponent<Unit>();
         if (unit == null) unit = go.AddComponent<Unit>();
 
-        unit.Initialize(playerResources.currentPlayer, currentTile);
+        // ✅ FIX: currentPlayer -> CurrentPlayer
+        unit.Initialize(playerResources.CurrentPlayer, currentTile);
         currentTile.AssignUnit(unit);
 
         ShowCityPanel();

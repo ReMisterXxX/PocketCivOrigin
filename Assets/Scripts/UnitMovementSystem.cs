@@ -9,6 +9,9 @@ public class UnitMovementSystem : MonoBehaviour
     [SerializeField] private Camera mainCamera;
     [SerializeField] private UnitCombatSystem combatSystem;
 
+    [Header("Turn / Player")]
+    [SerializeField] private PlayerResources playerResources; // ✅ NEW
+
     [Header("UI")]
     [SerializeField] private UnitInfoUI unitInfoUI;
 
@@ -52,16 +55,27 @@ public class UnitMovementSystem : MonoBehaviour
     {
         if (mainCamera == null) mainCamera = Camera.main;
         if (combatSystem == null) combatSystem = FindObjectOfType<UnitCombatSystem>();
+        if (playerResources == null) playerResources = FindObjectOfType<PlayerResources>(); // ✅ NEW
+    }
+
+    // ✅ NEW: единая проверка "можно ли управлять юнитом"
+    private bool CanControlUnit(Unit unit)
+    {
+        if (unit == null) return false;
+        if (playerResources == null) return true; // если кооп ещё не подключён — как раньше
+        return unit.Owner == playerResources.CurrentPlayer;
     }
 
     public void SelectUnitFromClick(Unit unit)
-{
-    if (unit == null) return;
-    // используем твою приватную SelectUnit
-    // (если SelectUnit у тебя private — просто оставь этот метод ВНУТРИ того же класса)
-    SelectUnit(unit);
-}
+    {
+        if (unit == null) return;
 
+        // ✅ A) Запрет выбора чужого юнита
+        if (!CanControlUnit(unit))
+            return;
+
+        SelectUnit(unit);
+    }
 
     public void ToggleAttackMode()
     {
@@ -71,42 +85,47 @@ public class UnitMovementSystem : MonoBehaviour
 
     // ✅ TileSelector вызывает это. Возвращает true только если был клик-атака.
     public bool HandleTileClick(Tile tile)
-{
-    if (tile == null) return false;
-
-    Unit clickedUnit = FindUnitOnTile(tile);
-
-    // 1) атака
-    if (attackMode && selectedUnit != null && clickedUnit != null && clickedUnit != selectedUnit)
     {
-        if (combatSystem != null && combatSystem.CanAttack(selectedUnit, clickedUnit))
+        if (tile == null) return false;
+
+        Unit clickedUnit = FindUnitOnTile(tile);
+
+        // 1) атака
+        if (attackMode && selectedUnit != null && clickedUnit != null && clickedUnit != selectedUnit)
         {
-            TryAttackSelectedUnit(clickedUnit);
-            return true;
+            if (combatSystem != null && combatSystem.CanAttack(selectedUnit, clickedUnit))
+            {
+                TryAttackSelectedUnit(clickedUnit);
+                return true;
+            }
         }
-    }
 
-    // 2) ✅ клик в атак-моде, но не атака -> сброс всего
-    if (attackMode)
-    {
-        attackMode = false;
-        ClearSelection();
-        RefreshMarkers();
+        // 2) ✅ клик в атак-моде, но не атака -> сброс всего
+        if (attackMode)
+        {
+            attackMode = false;
+            ClearSelection();
+            RefreshMarkers();
+            return false;
+        }
+
+        // 3) обычная логика
+        OnTileClicked(tile);
         return false;
     }
 
-    // 3) обычная логика
-    OnTileClicked(tile);
-    return false;
-}
-
-        // ✅ TileSelector будет звать это при клике по юниту
+    // ✅ TileSelector будет звать это при клике по юниту
     // Возвращает true, если клик "съеден" (атака началась)
     public bool HandleUnitClick(Unit clickedUnit)
     {
         if (clickedUnit == null) return false;
 
-        // 1) Если AttackMode: пытаемся атаковать (и ничего не выделяем/не меняем)
+        // В коопе/мультиплеере чужих юнитов не выбираем.
+        // Но атаковать их своими — можно.
+        if (!attackMode && !CanControlUnit(clickedUnit))
+            return false;
+
+        // 1) Если AttackMode: пытаемся атаковать
         if (attackMode)
         {
             if (selectedUnit != null && clickedUnit != selectedUnit)
@@ -114,11 +133,9 @@ public class UnitMovementSystem : MonoBehaviour
                 if (combatSystem != null && combatSystem.CanAttack(selectedUnit, clickedUnit))
                 {
                     TryAttackSelectedUnit(clickedUnit);
-                    return true; // ✅ атака началась
+                    return true;
                 }
             }
-
-            // AttackMode включен, но атаки нет — НЕ меняем выделение и НЕ трогаем тайлы
             return false;
         }
 
@@ -126,8 +143,6 @@ public class UnitMovementSystem : MonoBehaviour
         SelectUnitFromClick(clickedUnit);
         return false;
     }
-
-
 
     // совместимость (если где-то вызывается напрямую)
     public void OnTileClicked(Tile tile)
@@ -140,13 +155,21 @@ public class UnitMovementSystem : MonoBehaviour
         if (attackMode)
         {
             if (clickedUnit != null)
-                SelectUnit(clickedUnit);
+            {
+                // в атак-моде выделение чужого юнита не делаем,
+                // атаковать нужно через HandleUnitClick / маркеры
+                if (CanControlUnit(clickedUnit))
+                    SelectUnit(clickedUnit);
+            }
             return;
         }
 
         // обычный режим
         if (clickedUnit != null)
         {
+            if (!CanControlUnit(clickedUnit))
+                return;
+
             SelectUnit(clickedUnit);
             return;
         }
@@ -175,30 +198,59 @@ public class UnitMovementSystem : MonoBehaviour
 
         if (unitInfoUI != null)
             unitInfoUI.Hide();
+
+        attackMode = false;
+    
     }
 
-    // ✅ Вызывается TurnManager-ом в начале нового хода
-    public void ResetAllUnitsForNewTurn()
+    // ✅ B) Сброс ходов только юнитов активного игрока
+    public void ResetUnitsForNewTurn(PlayerId player)
     {
-        Unit[] allUnits = FindObjectsOfType<Unit>();
-        foreach (var u in allUnits)
+        Unit[] all = FindObjectsOfType<Unit>();
+        foreach (var u in all)
         {
             if (u == null) continue;
-            u.ResetMoves(); // должно быть в твоём Unit.cs
+            if (u.Owner != player) continue;
+            u.ResetMoves();
         }
 
-        // Обновим маркеры для выбранного юнита
         RefreshMarkers();
 
-        // Обновим панель, если выбранный юнит есть
         if (unitInfoUI != null && selectedUnit != null)
             unitInfoUI.Refresh(selectedUnit);
     }
 
+    // ✅ старый метод оставляем для совместимости
+    public void ResetAllUnitsForNewTurn()
+    {
+        // если подключён мультиплеер/кооп — сбрасываем только текущего игрока
+        if (playerResources != null)
+        {
+            ResetUnitsForNewTurn(playerResources.CurrentPlayer);
+            return;
+        }
+
+        // иначе — как раньше, всем
+        Unit[] allUnits = FindObjectsOfType<Unit>();
+        foreach (var u in allUnits)
+        {
+            if (u == null) continue;
+            u.ResetMoves();
+        }
+
+        RefreshMarkers();
+
+        if (unitInfoUI != null && selectedUnit != null)
+            unitInfoUI.Refresh(selectedUnit);
+    }
 
     private void SelectUnit(Unit unit)
     {
         if (unit == null) return;
+
+        // ✅ A) Запрет выбора чужого юнита (на всякий случай двойная защита)
+        if (!CanControlUnit(unit))
+            return;
 
         selectedUnit = unit;
         selectedUnit.SetMoving(false);
@@ -301,13 +353,11 @@ public class UnitMovementSystem : MonoBehaviour
         if (attacker == null || defender == null)
             yield break;
 
-        // 🔒 Блокируем "прилипание" к тайлу во время анимации
         attacker.SetMoving(true);
 
         Vector3 startPos = attacker.transform.position;
         Vector3 targetPos = defender.transform.position;
 
-        // направление удара (по плоскости)
         Vector3 dir = targetPos - startPos;
         dir.y = 0f;
 
@@ -319,17 +369,13 @@ public class UnitMovementSystem : MonoBehaviour
 
         dir.Normalize();
 
-        // 🔁 Поворот в сторону атаки
         attacker.FaceDirection(dir);
 
-        // насколько выдвигаемся вперёд
         Vector3 lungePos = startPos + dir * attackLungeDistance;
 
-        // ⏱️ Анимация: вперёд + назад
         float totalDuration = Mathf.Max(0.01f, attackAnimDuration);
         float halfDuration = totalDuration * 0.5f;
 
-        // ▶️ движение ВПЕРЁД
         float t = 0f;
         while (t < 1f)
         {
@@ -342,7 +388,6 @@ public class UnitMovementSystem : MonoBehaviour
             yield return null;
         }
 
-        // ◀️ возврат НАЗАД
         t = 0f;
         while (t < 1f)
         {
@@ -355,13 +400,10 @@ public class UnitMovementSystem : MonoBehaviour
             yield return null;
         }
 
-        // 🔓 Возвращаем контроль юниту
         attacker.transform.position = startPos;
         attacker.SetMoving(false);
         attacker.SnapToCurrentTile();
     }
-
-
 
     private IEnumerator DeathRoutine(Unit unit)
     {
@@ -396,6 +438,10 @@ public class UnitMovementSystem : MonoBehaviour
     private bool TryMoveSelectedUnitTo(Tile target)
     {
         if (selectedUnit == null || target == null) return false;
+
+        // ✅ нельзя двигать чужого (на всякий случай)
+        if (!CanControlUnit(selectedUnit))
+            return false;
 
         if (!selectedUnit.HasMoves())
             return false;
