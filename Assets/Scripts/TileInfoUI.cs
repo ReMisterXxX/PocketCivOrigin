@@ -67,13 +67,19 @@ public class TileInfoUI : MonoBehaviour
         currentTile = tile;
         if (currentTile == null) return;
 
-        bool isMine = playerResources == null || currentTile.Owner == playerResources.CurrentPlayer;
+        // ✅ МОЙ тайл
+        bool isMine = (playerResources == null) || (currentTile.Owner == playerResources.CurrentPlayer);
 
-        // ✅ Build только на своём
+        // ✅ НОВОЕ: можно строить на МОЁМ или НЕЙТРАЛЬНОМ тайле
+        bool isNeutral = (currentTile.Owner == PlayerId.None);
+        bool canBuild = isMine || isNeutral;
+
+        // ✅ Build: теперь не только на своём, но и на нейтральном
+        // Вариант 1: показывать кнопку только если можно строить
         if (buildButton != null)
-            buildButton.gameObject.SetActive(isMine);
+            buildButton.gameObject.SetActive(canBuild);
 
-        // ✅ Hire панель только на своём
+        // ✅ Hire панель только на своём (оставляем как было)
         if (cityRecruitPanelUI != null)
         {
             if (isMine) cityRecruitPanelUI.ShowForTile(currentTile);
@@ -87,7 +93,12 @@ public class TileInfoUI : MonoBehaviour
         }
 
         if (infoText != null)
-            infoText.text = "Press \"Info\" to view tile details.";
+        {
+            if (!canBuild && playerResources != null)
+                infoText.text = "Can't build on enemy territory.";
+            else
+                infoText.text = "Press \"Info\" to view tile details.";
+        }
 
         if (mainCg != null)
         {
@@ -119,6 +130,21 @@ public class TileInfoUI : MonoBehaviour
     private void OnBuildClicked()
     {
         if (currentTile == null) return;
+
+        // ✅ безопасность: даже если кнопку кто-то включил вручную,
+        // мы не даём строить на вражеском тайле.
+        if (playerResources != null)
+        {
+            bool isMine = currentTile.Owner == playerResources.CurrentPlayer;
+            bool isNeutral = currentTile.Owner == PlayerId.None;
+            bool canBuild = isMine || isNeutral;
+
+            if (!canBuild)
+            {
+                if (infoText != null) infoText.text = "Can't build on enemy territory.";
+                return;
+            }
+        }
 
         if (buildMenuUI != null)
         {

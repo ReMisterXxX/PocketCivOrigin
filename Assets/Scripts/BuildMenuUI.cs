@@ -35,7 +35,6 @@ public class BuildMenuUI : MonoBehaviour
         cg = panel.GetComponent<CanvasGroup>();
         if (cg == null) cg = panel.AddComponent<CanvasGroup>();
 
-        // ✅ скрываем через CanvasGroup, НЕ выключая объект
         HideInstant();
 
         if (buildSystem == null) buildSystem = FindObjectOfType<BuildSystem>();
@@ -46,20 +45,16 @@ public class BuildMenuUI : MonoBehaviour
         if (buildCityButton != null) buildCityButton.onClick.AddListener(OnBuildCity);
         if (buildMineButton != null) buildMineButton.onClick.AddListener(OnBuildMine);
 
-        // ===============================
-        // ✅ ФИКС: названия кнопок построек
-        // ===============================
+        // Названия кнопок (чтобы не было "Button")
         var cityLabel = buildCityButton != null
             ? buildCityButton.GetComponentInChildren<TextMeshProUGUI>(true)
             : null;
-        if (cityLabel != null)
-            cityLabel.text = "Build City";
+        if (cityLabel != null) cityLabel.text = "Build City";
 
         var mineLabel = buildMineButton != null
             ? buildMineButton.GetComponentInChildren<TextMeshProUGUI>(true)
             : null;
-        if (mineLabel != null)
-            mineLabel.text = "Build Mine";
+        if (mineLabel != null) mineLabel.text = "Build Mine";
     }
 
     public void ShowForTile(Tile tile)
@@ -67,10 +62,13 @@ public class BuildMenuUI : MonoBehaviour
         currentTile = tile;
         if (currentTile == null) return;
 
-        // ✅ нельзя строить на чужой территории
-        bool isMine = playerResources == null || currentTile.Owner == playerResources.CurrentPlayer;
-        if (buildCityButton != null) buildCityButton.interactable = isMine;
-        if (buildMineButton != null) buildMineButton.interactable = isMine;
+        PlayerId currentPlayer = playerResources != null ? playerResources.CurrentPlayer : PlayerId.Player1;
+
+        // ✅ ТОЛЬКО своё или ничейное
+        bool canBuildHere = (currentTile.Owner == currentPlayer) || (currentTile.Owner == PlayerId.None);
+
+        if (buildCityButton != null) buildCityButton.interactable = canBuildHere;
+        if (buildMineButton != null) buildMineButton.interactable = canBuildHere;
 
         if (titleText != null)
         {
@@ -79,7 +77,10 @@ public class BuildMenuUI : MonoBehaviour
         }
 
         if (hintText != null)
-            hintText.text = isMine ? "" : "Not your tile";
+        {
+            if (canBuildHere) hintText.text = "";
+            else hintText.text = "Not your tile";
+        }
 
         Show();
     }

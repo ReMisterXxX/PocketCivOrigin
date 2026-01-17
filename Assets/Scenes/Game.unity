@@ -1355,6 +1355,7 @@ MonoBehaviour:
   panelAnimDuration: 0.15
   cityRecruitPanelUI: {fileID: 1600962192}
   buildMenuUI: {fileID: 1526562254}
+  playerResources: {fileID: 1846007008}
 --- !u!114 &309573924
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2513,7 +2514,6 @@ RectTransform:
   - {fileID: 1226666925}
   - {fileID: 1526562253}
   - {fileID: 1260093786}
-  - {fileID: 1454596954}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
@@ -2653,7 +2653,7 @@ RectTransform:
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 0, y: 1}
   m_AnchoredPosition: {x: 10, y: -30}
-  m_SizeDelta: {x: 300, y: 50}
+  m_SizeDelta: {x: 500, y: 50}
   m_Pivot: {x: 0, y: 1}
 --- !u!1 &872090842
 GameObject:
@@ -3285,7 +3285,6 @@ GameObject:
   - component: {fileID: 963194227}
   - component: {fileID: 963194226}
   - component: {fileID: 963194229}
-  - component: {fileID: 963194230}
   m_Layer: 0
   m_Name: Main Camera
   m_TagString: MainCamera
@@ -3386,20 +3385,6 @@ MonoBehaviour:
   maxDistance: 10
   minPitch: 20
   maxPitch: 80
---- !u!114 &963194230
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 963194225}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: a68a71e6b8386ef4bbe38df1a55d6357, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  tileInfoUI: {fileID: 309573923}
-  unitMovementSystem: {fileID: 0}
 --- !u!1 &1021586168
 GameObject:
   m_ObjectHideFlags: 0
@@ -3484,7 +3469,7 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 53.7
+  m_fontSize: 26.85
   m_fontSizeBase: 24
   m_fontWeight: 400
   m_enableAutoSizing: 1
@@ -4711,12 +4696,13 @@ RectTransform:
   - {fileID: 2115345148}
   - {fileID: 871468664}
   - {fileID: 943828822}
+  - {fileID: 1454596954}
   m_Father: {fileID: 855138402}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0}
   m_AnchorMax: {x: 0.5, y: 0}
   m_AnchoredPosition: {x: 0, y: 120}
-  m_SizeDelta: {x: 500, y: 200}
+  m_SizeDelta: {x: 700, y: 200}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!1 &1356603333
 GameObject:
@@ -4931,6 +4917,8 @@ MonoBehaviour:
   cityTerritoryRadius: 2
   cityTerritoryAlpha: 0.45
   startingPlayer: 0
+  spawnSecondStartingCity: 1
+  secondStartingPlayer: 1
   goldDepositPrefabs:
   - {fileID: 2850790213411879482, guid: 5e585724eb6a47640be9355a9ad3b3fa, type: 3}
   - {fileID: 5701837320479451169, guid: ffee12c74fc3e5f469229b729804eb22, type: 3}
@@ -5464,6 +5452,7 @@ GameObject:
   - component: {fileID: 1454596957}
   - component: {fileID: 1454596956}
   - component: {fileID: 1454596955}
+  - component: {fileID: 1454596958}
   m_Layer: 5
   m_Name: AttackButton
   m_TagString: Untagged
@@ -5478,19 +5467,19 @@ RectTransform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1454596953}
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 1021586169}
-  m_Father: {fileID: 855138402}
+  m_Father: {fileID: 1260093786}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 0}
-  m_AnchorMax: {x: 0, y: 0}
-  m_AnchoredPosition: {x: 20, y: 20}
-  m_SizeDelta: {x: 200, y: 60}
-  m_Pivot: {x: 0, y: 0}
+  m_AnchorMin: {x: 1, y: 0}
+  m_AnchorMax: {x: 1, y: 0}
+  m_AnchoredPosition: {x: -10, y: 10}
+  m_SizeDelta: {x: 120, y: 30}
+  m_Pivot: {x: 1, y: 0}
 --- !u!114 &1454596955
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -5537,7 +5526,7 @@ MonoBehaviour:
       m_Calls:
       - m_Target: {fileID: 1846007010}
         m_TargetAssemblyTypeName: UnitMovementSystem, Assembly-CSharp
-        m_MethodName: ToggleAttackMode
+        m_MethodName: 
         m_Mode: 1
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
@@ -5585,6 +5574,21 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1454596953}
   m_CullTransparentMesh: 1
+--- !u!114 &1454596958
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1454596953}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 72141d65bb936594c850d7318bc2f1cf, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  unitMovementSystem: {fileID: 1846007010}
+  button: {fileID: 1454596955}
+  label: {fileID: 1021586170}
 --- !u!1 &1526562252
 GameObject:
   m_ObjectHideFlags: 0
@@ -5642,6 +5646,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   buildSystem: {fileID: 1846007012}
+  playerResources: {fileID: 1846007008}
   panel: {fileID: 1526562252}
   closeButton: {fileID: 36197803}
   titleText: {fileID: 1356603335}
@@ -6708,14 +6713,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1e70bbea19d881b47aeb4b86ca2e5e8a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  startGold: 10
-  startCoal: 10
+  activePlayers: 0000000001000000
+  startPerPlayer: []
   fallbackGoldIncome: 5
   fallbackCoalIncome: 5
-  gold: 10
-  coal: 10
-  goldIncome: 0
-  coalIncome: 0
   currentPlayer: 0
 --- !u!4 &1846007009
 Transform:
@@ -6746,6 +6747,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   mainCamera: {fileID: 963194227}
   combatSystem: {fileID: 1846007013}
+  playerResources: {fileID: 1846007008}
   unitInfoUI: {fileID: 1846007014}
   handleMouseInput: 0
   moveMarkerPrefab: {fileID: 7629812530992379075, guid: a3b77de1c3aa0d24f8f1e232d570d3b0, type: 3}
@@ -6772,6 +6774,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   tileInfoUI: {fileID: 309573923}
   unitMovementSystem: {fileID: 1846007010}
+  attackModeButtonUI: {fileID: 1454596958}
+  playerResources: {fileID: 1846007008}
 --- !u!114 &1846007012
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -6809,7 +6813,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   enableCounterAttack: 1
   counterAttackMultiplier: 0.5
-  allowFriendlyFire: 1
+  allowFriendlyFire: 0
 --- !u!114 &1846007014
 MonoBehaviour:
   m_ObjectHideFlags: 0

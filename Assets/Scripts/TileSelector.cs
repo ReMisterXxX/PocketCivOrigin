@@ -42,6 +42,26 @@ public class TileSelector : MonoBehaviour
         Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
         if (Physics.Raycast(ray, out RaycastHit hit, 1000f))
         {
+            // ✅ ВАРИАНТ B:
+            // Если кликнули по юниту — считаем, что выбрали его тайл (чтобы TileInfo/Build не пропадали).
+            Unit clickedUnit = hit.collider.GetComponentInParent<Unit>();
+            if (clickedUnit != null && clickedUnit.CurrentTile != null)
+            {
+                Tile tileFromUnit = clickedUnit.CurrentTile;
+
+                SelectTile(tileFromUnit);
+
+                if (unitMovementSystem != null)
+                {
+                    // пусть твоя система сама решит: выделение юнита/ход/атака
+                    unitMovementSystem.HandleTileClick(tileFromUnit);
+                }
+
+                RefreshAttackButton();
+                return;
+            }
+
+            // обычная логика: кликнули по тайлу
             Tile tile = hit.collider.GetComponentInParent<Tile>();
             if (tile != null)
             {
@@ -58,6 +78,7 @@ public class TileSelector : MonoBehaviour
             }
         }
 
+        // клик в пустоту — снимаем выбор
         DeselectCurrent();
         if (unitMovementSystem != null)
         {
